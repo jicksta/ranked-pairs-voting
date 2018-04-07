@@ -10,9 +10,37 @@ import (
 )
 
 func main() {
-	votes := ReadVoteFile("votes.txt")
+	votes := ReadVoteFile("test/fixtures/tennessee.txt")
 	candidates := AllCandidates(votes)
-	fmt.Println(candidates)
+	// fmt.Println(candidates)
+
+	pairCounts := make(map[set.OrderedPair]int64)
+	for _, vote := range votes {
+		pairs := vote.Pairs()
+		for _, pair := range pairs {
+			pairCounts[pair]++
+		}
+	}
+
+	wins := make(map[string]int64)
+	for _, candidateA := range candidates {
+		for _, candidateB := range candidates {
+			if candidateB != candidateA {
+				favorA := pairCounts[set.OrderedPair{First: candidateA, Second: candidateB}]
+				favorB := pairCounts[set.OrderedPair{First: candidateB, Second: candidateA}]
+				if favorA > favorB {
+					wins[candidateA] += favorA
+				} else if favorB > favorA {
+					wins[candidateB] += favorB
+				} else {
+					panic(fmt.Errorf("TODO! TIE BETWEEN %s and %s", candidateA, candidateB))
+				}
+
+			}
+		}
+	}
+
+	fmt.Println(wins)
 }
 
 func AllCandidates(votes []Vote) []string {
@@ -24,8 +52,7 @@ func AllCandidates(votes []Vote) []string {
 	}
 	var candidates = make([]string, 0)
 	for candidateUntyped := range distinctCandidatesSet.Iter() {
-		candidate, ok := candidateUntyped.(string)
-		if ok {
+		if candidate, ok := candidateUntyped.(string); ok {
 			candidates = append(candidates, candidate)
 		}
 	}
@@ -38,9 +65,18 @@ type Vote struct {
 }
 
 func (vote Vote) Pairs() []set.OrderedPair {
-	pair1 := set.OrderedPair{First: "foo", Second: "bar"}
-	pair2 := set.OrderedPair{First: "qaz", Second: "qwerty"}
-	return []set.OrderedPair{pair1, pair2}
+	var pairs = make([]set.OrderedPair, 0)
+	for indexOuter := range vote.rankedChoices {
+		for indexInner := indexOuter + 1; indexInner < len(vote.rankedChoices); indexInner++ {
+			pair := set.OrderedPair{First: vote.rankedChoices[indexOuter], Second: vote.rankedChoices[indexInner]}
+			pairs = append(pairs, pair)
+		}
+	}
+
+	return pairs
+	// pair1 := set.OrderedPair{First: "foo", Second: "bar"}
+	// pair2 := set.OrderedPair{First: "qaz", Second: "qwerty"}
+	// return []set.OrderedPair{pair1, pair2}
 }
 
 func FakeVotes() []Vote {

@@ -1,6 +1,8 @@
 package voting
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -13,7 +15,7 @@ var _ = Describe("The Tideman Ranked Pair election calculator", func() {
 	Context("An Election instance loaded from the Tennessee fixture", func() {
 
 		BeforeEach(func() {
-			e = LoadElectionFromFile("../support/fixtures/tennessee.txt")
+			e = LoadElectionFromFile("../support/fixtures/wikipedia_tennessee.txt")
 		})
 
 		It("has 4 Candidates", func() {
@@ -53,12 +55,27 @@ var _ = Describe("The Tideman Ranked Pair election calculator", func() {
 		})
 	})
 
+	Describe("The Condorcet.ca workbench fixtures", func() {
+
+		BeforeEach(func() {
+			e = LoadElectionFromFile("../support/fixtures/condorcet.ca/scenario1.txt")
+		})
+
+		Context("scenario1", func() {
+			It("finds MOWZ to be the winner", func() {
+				winners := e.RelativeWinners()
+				fmt.Println(winners)
+				// Expect(winners[0].winner).To(Equal("MOWZ_MIKE"))
+			})
+		})
+	})
+
 })
 
 // Describe("Using Condorcet.ca sample elections", func() {
 // 	Context("With scenario1 fixture", func() {
 // 		BeforeEach(func() {
-// 			e = LoadElectionFromFile("../support/fixtures/tennessee.txt")
+// 			e = LoadElectionFromFile("../support/fixtures/wikipedia_tennessee.txt")
 // 		})
 // 		It("has 22 votes", func() {
 // 			Expect(len(e.Votes)).To(Equal(22))

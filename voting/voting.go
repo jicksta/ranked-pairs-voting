@@ -42,12 +42,12 @@ func LoadElectionFromFile(filename string) Election {
 	}
 }
 
-// PreferencePairCounts returns an important data structure for the algorithm: the counts of all
-// combinations of relative preferences from each vote
-func (election Election) PreferencePairCounts() map[mapset.OrderedPair]int {
+// CondorcetComparisonCounts returns an important data structure for the algorithm: a tally of all
+// votes if all candidates ran against each other.
+func (election Election) CondorcetComparisonCounts() map[mapset.OrderedPair]int {
 	counts := make(map[mapset.OrderedPair]int)
 	for _, vote := range election.Votes {
-		pairs := vote.preferencePairs()
+		pairs := vote.allVotersCombinatorialWinners()
 		for _, pair := range pairs {
 			counts[pair]++
 		}
@@ -57,7 +57,7 @@ func (election Election) PreferencePairCounts() map[mapset.OrderedPair]int {
 
 // RelativeWinners returns an array of all candidates compared against each other, with the winner decided
 func (election Election) RelativeWinners() []RelativeWinner {
-	pairCounts := election.PreferencePairCounts()
+	pairCounts := election.CondorcetComparisonCounts()
 
 	// Using a set here isn't great. The loops should visit each combination (A,B) and (B,A) once.
 	var relativeWinnerSet = mapset.NewSet()
@@ -100,7 +100,13 @@ func (election Election) RelativeWinners() []RelativeWinner {
 		}
 	}
 
+	// Remove non-determinism from the map by sorting lexicographically in the event of a tie
 	sort.SliceStable(relativeWinners, func(i int, j int) bool {
+		countLeft, countRight := relativeWinners[i].winnerCount, relativeWinners[j].winnerCount
+		if countLeft == countRight {
+			lexicographicalWinner := strings.Compare(relativeWinners[i].winner, relativeWinners[j].winner)
+			return lexicographicalWinner > 0
+		}
 		return relativeWinners[i].winnerCount > relativeWinners[j].winnerCount
 	})
 
@@ -139,8 +145,9 @@ func guard(e error) {
 	}
 }
 
-// preferencePairs returns relative winners from rankedChoices as tuples (winner, loser)
-func (vote Vote) preferencePairs() []mapset.OrderedPair {
+// allVotersCombinatorialWinners returns all voters' winners from their vote's rankedChoices
+// as tuples (winner, loser)
+func (vote Vote) allVotersCombinatorialWinners() []mapset.OrderedPair {
 	var pairs = make([]mapset.OrderedPair, 0)
 	for indexOuter := range vote.rankedChoices {
 		for indexInner := indexOuter + 1; indexInner < len(vote.rankedChoices); indexInner++ {

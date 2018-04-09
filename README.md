@@ -7,6 +7,7 @@
  * Separate Repository in preparation for a database
  * Integrate with Postgres / LevelDB or another SQL database for persistence
  * When receiving votes in realtime, run cancellable calculation in goroutine
+ * Create a better file format, e.g. `ABC123 A=B=C D=E F G H=I J`
 
 ## Even Better...
 

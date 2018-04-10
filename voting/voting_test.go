@@ -1,8 +1,6 @@
 package voting
 
 import (
-	"fmt"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -43,7 +41,7 @@ var _ = Describe("The Tideman Ranked Pair election calculator", func() {
 				Expect(winner.winnerCount).To(Equal(expectedWinCount))
 				Expect(winner.loserCount).To(Equal(expectedLoseCount))
 			}
-			winners := e.RelativeWinners()
+			winners := e.Ranks()
 			Expect(len(winners)).To(Equal(6))
 
 			expectWinner(winners[0], "Chattanooga", "Knoxville", 83, 17)
@@ -52,21 +50,6 @@ var _ = Describe("The Tideman Ranked Pair election calculator", func() {
 			expectWinner(winners[3], "Nashville", "Memphis", 58, 42)
 			expectWinner(winners[4], "Knoxville", "Memphis", 58, 42)
 			expectWinner(winners[5], "Chattanooga", "Memphis", 58, 42)
-		})
-	})
-
-	Describe("The Condorcet.ca workbench fixtures", func() {
-
-		BeforeEach(func() {
-			e = LoadElectionFromFile("../support/fixtures/condorcet.ca/scenario1.txt")
-		})
-
-		Context("scenario1", func() {
-			It("finds MOWZ to be the winner", func() {
-				winners := e.RelativeWinners()
-				fmt.Println(winners)
-				// Expect(winners[0].winner).To(Equal("MOWZ_MIKE"))
-			})
 		})
 	})
 

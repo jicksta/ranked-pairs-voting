@@ -25,29 +25,80 @@ type RelativeWinner struct {
 	loserCount  int
 }
 
+// OneVersusOneResult is a ternary enum to record the final result of
+// a hypothetical 1v1 condorcet "instant round-robin" election
+type OneVersusOneResult byte
+
+const (
+	// A_TIES_B used in OneVersusOneResult
+	A_TIES_B = 0
+	// A_BEATS_B used in OneVersusOneResult
+	A_BEATS_B = 1
+	// B_BEATS_A used in OneVersusOneResult
+	B_BEATS_A = 2
+)
+
+type OneVersusOneTally struct {
+	A         string
+	B         string
+	NumFavorA int
+	NumFavorB int
+	NumTies   int
+	Result    OneVersusOneResult
+	// Magnitude float32 // Uncertain whether this will be needed in the end
+}
+
+//////////
+///// VOTE
+//////////
+
 // Vote records which voter voted for which candidates
 type Vote struct {
 	voterName     string
 	rankedChoices []string
 }
 
-// LoadElectionFromFile loads votes from a file and pre-computes some important data from them.
-func LoadElectionFromFile(filename string) Election {
-	votes := readVoteFile(filename)
-	candidates := distinctCandidates(votes)
-	return Election{
-		Votes:          votes,
-		Candidates:     candidates,
-		SourceFileName: filename,
+// combinatorialPreferences returns all voters' winners from their vote's rankedChoices
+// as tuples (winner, loser).
+// TODO!!! THIS MUST CONSIDER TIES IN THE DATA
+func (vote Vote) combinatorialPreferences() []mapset.OrderedPair {
+
+	// If there is a tie, candidates at the same rank
+
+	var pairs = make([]mapset.OrderedPair, 0)
+	for indexOuter := range vote.rankedChoices {
+		for indexInner := indexOuter + 1; indexInner < len(vote.rankedChoices); indexInner++ {
+			pair := newPair(vote.rankedChoices[indexOuter], vote.rankedChoices[indexInner])
+			pairs = append(pairs, pair)
+		}
 	}
+
+	return pairs
 }
+
+//////////
+///// ELECTION
+//////////
+
+// // CondorcetComparisonCounts returns an important data structure for the algorithm: a tally of all
+// // votes if all candidates ran against each other.
+// func (election Election) CondorcetComparisonCounts() map[mapset.OrderedPair]int {
+// 	counts := make(map[mapset.OrderedPair]int)
+// 	for _, vote := range election.Votes {
+// 		pairs := vote.combinatorialPreferences()
+// 		for _, pair := range pairs {
+// 			counts[pair]++
+// 		}
+// 	}
+// 	return counts
+// }
 
 // CondorcetComparisonCounts returns an important data structure for the algorithm: a tally of all
 // votes if all candidates ran against each other.
 func (election Election) CondorcetComparisonCounts() map[mapset.OrderedPair]int {
 	counts := make(map[mapset.OrderedPair]int)
 	for _, vote := range election.Votes {
-		pairs := vote.allVotersCombinatorialWinners()
+		pairs := vote.combinatorialPreferences()
 		for _, pair := range pairs {
 			counts[pair]++
 		}
@@ -55,8 +106,8 @@ func (election Election) CondorcetComparisonCounts() map[mapset.OrderedPair]int 
 	return counts
 }
 
-// RelativeWinners returns an array of all candidates compared against each other, with the winner decided
-func (election Election) RelativeWinners() []RelativeWinner {
+// Ranks returns an array of all candidates compared against each other, with the winner decided
+func (election Election) Ranks() []RelativeWinner {
 	pairCounts := election.CondorcetComparisonCounts()
 
 	// Using a set here isn't great. The loops should visit each combination (A,B) and (B,A) once.
@@ -70,6 +121,13 @@ func (election Election) RelativeWinners() []RelativeWinner {
 				// Lookup the counts of how many times candidate A beat candidate B and vice versa
 				favorA := pairCounts[newPair(candidateA, candidateB)]
 				favorB := pairCounts[newPair(candidateB, candidateA)]
+
+				relativeWinnerSet.Add(OneVersusOneTally{
+					A:         candidateA,
+					B:         candidateB,
+					NumFavorA: favorA,
+					NumFavorB: favorB,
+				})
 
 				if favorA > favorB {
 					relativeWinnerSet.Add(RelativeWinner{
@@ -113,8 +171,48 @@ func (election Election) RelativeWinners() []RelativeWinner {
 	return relativeWinners
 }
 
+//////////
+///// UTILITY
+//////////
+
 func (rw RelativeWinner) String() string {
 	return fmt.Sprintf("%s (%d) vs %s (%d)", rw.winner, rw.winnerCount, rw.loser, rw.loserCount)
+}
+
+// GraphVizDotFile returns the string contents of a .dot GraphViz file representing the DAG of winners
+func GraphVizDotFile(pairs []RelativeWinner) string {
+	var dot = "digraph Election {\n"
+	for _, pair := range pairs {
+		dot += fmt.Sprintf("  \"%s\" -> \"%s\";\n", pair.winner, pair.loser)
+
+	}
+	dot += "}"
+	return dot
+}
+
+// LoadElectionFromFile loads votes from a file and pre-computes some important data from them.
+func LoadElectionFromFile(filename string) Election {
+	votes := readVoteFile(filename)
+	candidates := distinctCandidates(votes)
+	return Election{
+		Votes:          votes,
+		Candidates:     candidates,
+		SourceFileName: filename,
+	}
+}
+
+// readVoteFile returns an array of Votes deserialized from a simple .txt file format
+func readVoteFile(filename string) []Vote {
+	file, err := os.Open(filename)
+	guard(err)
+
+	var votes []Vote
+	scanner := bufio.NewScanner(bufio.NewReader(file))
+	for scanner.Scan() {
+		tokens := strings.Split(scanner.Text(), " ")
+		votes = append(votes, Vote{tokens[0], tokens[1:]})
+	}
+	return votes
 }
 
 // distinctCandidates is a utility method that returns a distinct list of candidates observed in a Vote array
@@ -145,41 +243,13 @@ func guard(e error) {
 	}
 }
 
-// allVotersCombinatorialWinners returns all voters' winners from their vote's rankedChoices
-// as tuples (winner, loser)
-func (vote Vote) allVotersCombinatorialWinners() []mapset.OrderedPair {
-	var pairs = make([]mapset.OrderedPair, 0)
-	for indexOuter := range vote.rankedChoices {
-		for indexInner := indexOuter + 1; indexInner < len(vote.rankedChoices); indexInner++ {
-			pair := newPair(vote.rankedChoices[indexOuter], vote.rankedChoices[indexInner])
-			pairs = append(pairs, pair)
-		}
+func orderedStrings(one, two string) mapset.OrderedPair {
+	switch strings.Compare(one, two) {
+	case -1:
+		return newPair(one, two)
+	case 1:
+		return newPair(two, one)
+	default:
+		panic(fmt.Errorf("CANNOT ORDER IDENTICAL STRINGS. LOGIC ERROR? '%s' and '%s'", one, two))
 	}
-
-	return pairs
-}
-
-// readVoteFile returns an array of Votes deserialized from a simple .txt file format
-func readVoteFile(filename string) []Vote {
-	file, err := os.Open(filename)
-	guard(err)
-
-	var votes []Vote
-	scanner := bufio.NewScanner(bufio.NewReader(file))
-	for scanner.Scan() {
-		tokens := strings.Split(scanner.Text(), " ")
-		votes = append(votes, Vote{tokens[0], tokens[1:]})
-	}
-	return votes
-}
-
-// GraphVizDotFile returns the string contents of a .dot GraphViz file representing the DAG of winners
-func GraphVizDotFile(pairs []RelativeWinner) string {
-	var dot = "digraph Election {\n"
-	for _, pair := range pairs {
-		dot += fmt.Sprintf("  \"%s\" -> \"%s\";\n", pair.winner, pair.loser)
-
-	}
-	dot += "}"
-	return dot
 }

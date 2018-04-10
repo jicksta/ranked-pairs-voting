@@ -10,7 +10,7 @@ func main() {
 	// votes := ReadVoteFile("test/fixtures/tennessee.txt")
 	election := voting.LoadElectionFromFile("votes.txt")
 
-	fmt.Println(voting.GraphVizDotFile(election.RelativeWinners()))
+	fmt.Println(voting.GraphVizDotFile(election.Ranks()))
 
 	// dag := toposort.NewGraph(len(relativeWinners))
 	// dag.AddNodes(candidates...)

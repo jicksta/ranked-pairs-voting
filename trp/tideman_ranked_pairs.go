@@ -10,12 +10,12 @@ import (
 )
 
 type TidemanRankedPairsElection struct {
-	Votes          []Vote
+	Votes          []PersonalVote
 	Candidates     []string
 	SourceFilename string
 }
 
-type Vote struct {
+type PersonalVote struct {
 	VoterID string
 	Choices [][]string
 }
@@ -28,7 +28,7 @@ type OneVersusOneVote struct {
 	Ties   int
 }
 
-func (vote *Vote) EquivalentRoundRobinVotes() []OneVersusOneVote {
+func (vote *PersonalVote) EquivalentRoundRobinVotes() []OneVersusOneVote {
 	votes := []OneVersusOneVote{}
 	for indexOuter, choiceOuter := range vote.Choices {
 
@@ -61,6 +61,14 @@ func (vote *Vote) EquivalentRoundRobinVotes() []OneVersusOneVote {
 
 	}
 	return votes
+}
+
+func (vote *OneVersusOneVote) VictoryMagnitude() int {
+	var delta = vote.FavorA - vote.FavorB
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta
 }
 
 // TODO: Try setting Tally to map[string]map[string]*OneVersusOneVote to avoid mutation problems
@@ -99,6 +107,30 @@ func (tally *Tally) incrementTies(first, second string) {
 	(*tally)[a][b] = vote
 }
 
+func (tally *Tally) SortedByMagnitudeVictory() []OneVersusOneVote {
+
+	var result = []OneVersusOneVote{}
+	for aKey := range *tally {
+		for bKey := range (*tally)[aKey] {
+			result = append(result, (*tally)[aKey][bKey])
+		}
+	}
+
+	// For final counting purposes, we should add ties to both FavorA and FavorB
+	for i, vote := range result {
+		vote.FavorA += vote.Ties
+		vote.FavorB += vote.Ties
+		result[i] = vote
+	}
+
+	sort.SliceStable(result, func(i int, j int) bool {
+		leftVote, rightVote := result[i], result[j]
+		return leftVote.VictoryMagnitude() > rightVote.VictoryMagnitude()
+	})
+
+	return result
+}
+
 func (e *TidemanRankedPairsElection) Tally1v1s() Tally {
 	result := make(Tally)
 
@@ -120,7 +152,7 @@ func DeserializeFile(filename string) TidemanRankedPairsElection {
 	defer f.Close()
 
 	guard(err)
-	var votes []Vote
+	var votes []PersonalVote
 	scanner := bufio.NewScanner(bufio.NewReader(f))
 	whitespaceSeparator := regexp.MustCompile("\\s+")
 	for scanner.Scan() {
@@ -132,7 +164,7 @@ func DeserializeFile(filename string) TidemanRankedPairsElection {
 			potentialTies := strings.Split(token, "=")
 			prioritizedChoices = append(prioritizedChoices, potentialTies)
 		}
-		votes = append(votes, Vote{
+		votes = append(votes, PersonalVote{
 			VoterID: voterID,
 			Choices: prioritizedChoices,
 		})

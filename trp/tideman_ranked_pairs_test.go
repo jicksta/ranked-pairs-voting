@@ -34,8 +34,8 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 		BeforeEach(func() {
 			e = trp.TidemanRankedPairsElection{
 				Candidates: []string{"A", "B", "C", "D"},
-				Votes: []trp.Vote{
-					trp.Vote{
+				Votes: []trp.PersonalVote{
+					trp.PersonalVote{
 						VoterID: "ONE",
 						Choices: [][]string{
 							[]string{"A"},
@@ -96,8 +96,8 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 		BeforeEach(func() {
 			e = trp.TidemanRankedPairsElection{
 				Candidates: []string{"A", "B", "C", "D"},
-				Votes: []trp.Vote{
-					trp.Vote{
+				Votes: []trp.PersonalVote{
+					trp.PersonalVote{
 						VoterID: "ONE",
 						Choices: [][]string{
 							[]string{"A"},
@@ -105,7 +105,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 							[]string{"D"},
 						},
 					},
-					trp.Vote{
+					trp.PersonalVote{
 						VoterID: "TWO",
 						Choices: [][]string{
 							[]string{"A"},
@@ -114,7 +114,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 							[]string{"D"},
 						},
 					},
-					trp.Vote{
+					trp.PersonalVote{
 						VoterID: "THREE",
 						Choices: [][]string{
 							[]string{"C"},
@@ -147,17 +147,10 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 				Expect(e.Votes).To(HaveLen(22))
 			})
 
-			XIt("determines winners consistent with the workbench reference application", func() {
-				// winners := e.Ranks()
-				// Expect(winners).To(HaveLen(4))
-				// Expect(winners[0].winner).To(Equal([]string{"MOWZ_MIKE"}))
-				// Expect(winners[1].winner).To(Equal([]string{"DUCH_DAWN", "SAMM_YOSEM_T"}))
-				// Expect(winners[2].winner).To(Equal([]string{"YOTE_WALLY_C"}))
-				// Expect(winners[3].winner).To(Equal([]string{"RUHNER_ROD"}))
-			})
 		})
 	})
 
+	// scenario5 is by far the most complex example
 	Context("scenario5", func() {
 
 		BeforeEach(func() {
@@ -166,6 +159,27 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 
 		It("has 2000 votes", func() {
 			Expect(e.Votes).To(HaveLen(2000))
+		})
+
+		Describe("#SortedByMagnitudeVictory", func() {
+
+			var tally trp.Tally
+			var sorted []trp.OneVersusOneVote
+
+			BeforeEach(func() {
+				tally = e.Tally1v1s()
+				sorted = tally.SortedByMagnitudeVictory()
+			})
+
+			It("has the expected winner by highest magnitude", func() {
+				Expect(sorted[0]).To(Equal(trp.OneVersusOneVote{
+					A:      "FUDD_ELMIRA",
+					B:      "RUHNER_ROD",
+					FavorA: 1142,
+					FavorB: 1064,
+					Ties:   206,
+				}))
+			})
 		})
 
 		Describe("#Tally1v1s()", func() {

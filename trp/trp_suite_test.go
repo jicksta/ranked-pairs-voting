@@ -1,13 +1,12 @@
 package trp_test
 
 import (
-	"testing"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+  "testing"
+  "github.com/onsi/ginkgo"
+  "github.com/onsi/gomega"
 )
 
 func TestTrp(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Trp Suite")
+  gomega.RegisterFailHandler(ginkgo.Fail)
+  ginkgo.RunSpecs(t, "Trp Suite")
 }

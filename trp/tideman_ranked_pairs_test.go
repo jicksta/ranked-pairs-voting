@@ -1,24 +1,22 @@
-package trp_test
+package trp
 
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
-	trp "github.com/jicksta/go-ranked-pair-voting/trp"
 )
 
 var _ = Describe("TidemanRankedPairsElection", func() {
 
-	var e trp.TidemanRankedPairsElection
+	var e TidemanRankedPairsElection
 
-	Describe("Tally", func() {
-		Describe("Lookup", func() {
+	Describe("tally", func() {
+		Describe("lookup", func() {
 			It("guarantees a unique OneVersusOneVote for two candidates, irrespective of order passed in", func() {
-				tally := make(trp.Tally)
-				ba, _, _ := tally.Lookup("B", "A")
-				ab, _, _ := tally.Lookup("A", "B")
-				abAgain, _, _ := tally.Lookup("A", "B")
+				tally := make(tally)
+				ba := tally.lookup("B", "A")
+				ab := tally.lookup("A", "B")
+				abAgain := tally.lookup("A", "B")
 
 				Expect(ab).To(BeIdenticalTo(ba))
 				Expect(ab).To(BeIdenticalTo(abAgain))
@@ -29,13 +27,13 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 
 	})
 
-	Describe("#EquivalentRoundRobinVotes()", func() {
+	Describe("#equivalentRoundRobinVotes()", func() {
 
 		BeforeEach(func() {
-			e = trp.TidemanRankedPairsElection{
+			e = TidemanRankedPairsElection{
 				Candidates: []string{"A", "B", "C", "D"},
-				Votes: []trp.PersonalVote{
-					trp.PersonalVote{
+				Ballots: []Ballot{
+					Ballot{
 						VoterID: "ONE",
 						Choices: [][]string{
 							[]string{"A"},
@@ -49,7 +47,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 		})
 
 		It("computes OneVersusOneVotes according to Condorcet rules", func() {
-			Expect(e.Votes[0].EquivalentRoundRobinVotes()).To(Equal([]trp.OneVersusOneVote{
+			Expect(e.Ballots[0].equivalentRoundRobinVotes()).To(Equal([]OneVersusOneVote{
 				vote1v1("A", "B", false),
 				vote1v1("A", "C", false),
 				vote1v1("A", "D", false),
@@ -65,17 +63,17 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 
 		Describe("#Tally1v1s()", func() {
 
-			var tally trp.Tally
+			var tally tally
 
-			JustBeforeEach(func() {
-				tally = e.Tally1v1s()
+			BeforeEach(func() {
+				tally = e.tally1v1s()
 			})
 
 			DescribeTable("tallies FavorA, FavorB, and Ties correctly",
 				func(first, second string, favorFirst, favorSecond, ties int) {
-					vote, _, b := tally.Lookup(first, second)
+					vote := tally.lookup(first, second)
 
-					if first == b {
+					if first == vote.B {
 						favorFirst, favorSecond = favorSecond, favorFirst
 					}
 
@@ -94,10 +92,10 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 		})
 
 		BeforeEach(func() {
-			e = trp.TidemanRankedPairsElection{
+			e = TidemanRankedPairsElection{
 				Candidates: []string{"A", "B", "C", "D"},
-				Votes: []trp.PersonalVote{
-					trp.PersonalVote{
+				Ballots: []Ballot{
+					Ballot{
 						VoterID: "ONE",
 						Choices: [][]string{
 							[]string{"A"},
@@ -105,7 +103,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 							[]string{"D"},
 						},
 					},
-					trp.PersonalVote{
+					Ballot{
 						VoterID: "TWO",
 						Choices: [][]string{
 							[]string{"A"},
@@ -114,7 +112,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 							[]string{"D"},
 						},
 					},
-					trp.PersonalVote{
+					Ballot{
 						VoterID: "THREE",
 						Choices: [][]string{
 							[]string{"C"},
@@ -132,7 +130,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 	Describe("The Condorcet.ca workbench fixtures", func() {
 
 		BeforeEach(func() {
-			e = trp.DeserializeFile("../support/fixtures/condorcet.ca/scenario1.txt")
+			e = LoadElectionFile("../support/fixtures/condorcet.ca/scenario1.txt")
 		})
 
 		Context("scenario1", func() {
@@ -144,7 +142,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 			})
 
 			It("has 22 votes", func() {
-				Expect(e.Votes).To(HaveLen(22))
+				Expect(e.Ballots).To(HaveLen(22))
 			})
 
 		})
@@ -154,25 +152,25 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 	Context("scenario5", func() {
 
 		BeforeEach(func() {
-			e = trp.DeserializeFile("../support/fixtures/condorcet.ca/scenario5.txt")
+			e = LoadElectionFile("../support/fixtures/condorcet.ca/scenario5.txt")
 		})
 
 		It("has 2000 votes", func() {
-			Expect(e.Votes).To(HaveLen(2000))
+			Expect(e.Ballots).To(HaveLen(2000))
 		})
 
-		Describe("#SortedByMagnitudeVictory", func() {
+		Describe("#sortedByMagnitudeVictory", func() {
 
-			var tally trp.Tally
-			var sorted []trp.OneVersusOneVote
+			var tally tally
+			var sorted VotesList
 
 			BeforeEach(func() {
-				tally = e.Tally1v1s()
-				sorted = tally.SortedByMagnitudeVictory()
+				tally = e.tally1v1s()
+				sorted = tally.sortedByMagnitudeVictory()
 			})
 
 			It("has the expected winner by highest magnitude", func() {
-				Expect(sorted[0]).To(Equal(trp.OneVersusOneVote{
+				Expect(sorted[0]).To(Equal(OneVersusOneVote{
 					A:      "FUDD_ELMIRA",
 					B:      "RUHNER_ROD",
 					FavorA: 1142,
@@ -180,21 +178,41 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 					Ties:   206,
 				}))
 			})
+
+			It("calculates the expected winners", func() {
+				result, dropped := sorted.tsort()
+				Expect(result).To(Equal([]string{
+					"FUDD_ELMIRA", "COYOTE_WALLY", "BYRD_TWEE_T", "MOWZ_MICHAEL", "SAM_YOSEMITE",
+					"RUHNER_ROD", "DUCH_DAWN", "BUNNY_B", "MOWZ_MINERVA", "CAT_SYLVESTER_T",
+				}))
+
+				var droppedVotes []OneVersusOneVote
+				for _, drop := range dropped {
+					droppedVotes = append(droppedVotes, drop.Vote)
+				}
+				Expect(droppedVotes).To(Equal([]OneVersusOneVote{
+					OneVersusOneVote{A: "DUCH_DAWN", B: "MOWZ_MINERVA", FavorA: 1087, FavorB: 1102, Ties: 189},
+					OneVersusOneVote{A: "MOWZ_MINERVA", B: "RUHNER_ROD", FavorA: 1102, FavorB: 1099, Ties: 201},
+					OneVersusOneVote{A: "BUNNY_B", B: "MOWZ_MICHAEL", FavorA: 1095, FavorB: 1095, Ties: 190},
+				}))
+
+			})
+
 		})
 
 		Describe("#Tally1v1s()", func() {
 
-			var tally trp.Tally
+			var tally tally
 
 			BeforeEach(func() {
-				tally = e.Tally1v1s()
+				tally = e.tally1v1s()
 			})
 
 			DescribeTable("tallies FavorA, FavorB, and Ties correctly",
 				func(first, second string, favorFirst, favorSecond, ties int) {
-					vote, _, b := tally.Lookup(first, second)
+					vote := tally.lookup(first, second)
 
-					if first == b {
+					if first == vote.B {
 						favorFirst, favorSecond = favorSecond, favorFirst
 					}
 
@@ -213,7 +231,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 
 })
 
-func vote1v1(winner, loser string, isTie bool) trp.OneVersusOneVote {
+func vote1v1(winner, loser string, isTie bool) OneVersusOneVote {
 
 	var favorA, ties int
 
@@ -223,7 +241,7 @@ func vote1v1(winner, loser string, isTie bool) trp.OneVersusOneVote {
 		favorA = 1
 	}
 
-	return trp.OneVersusOneVote{
+	return OneVersusOneVote{
 		A:      winner,
 		B:      loser,
 		FavorA: favorA,

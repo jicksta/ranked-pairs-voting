@@ -1,26 +1,19 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/jicksta/go-ranked-pair-voting/voting"
+  "os"
+  "fmt"
+  "github.com/jicksta/go-ranked-pair-voting/trp"
 )
 
 func main() {
-	// votes := ReadVoteFile("test/fixtures/tennessee.txt")
-	election := voting.LoadElectionFromFile("votes.txt")
+  filename := os.Args[1]
+  election := trp.LoadElectionFile(filename)
+  results, _ := election.Result()
 
-	fmt.Println(voting.GraphVizDotFile(election.Ranks()))
+  fmt.Print("Results:\n\n")
 
-	// dag := toposort.NewGraph(len(relativeWinners))
-	// dag.AddNodes(candidates...)
-	// for _, relWinner := range relativeWinners {
-	// 	dag.AddEdge(relWinner.winner, relWinner.loser)
-	// }
-	// finalWinners, _ := dag.Toposort()
-
-	// fmt.Print("Ranked Pair winners:\n\n")
-	// for _, finalWinner := range finalWinners {
-	// 	fmt.Println(finalWinner)
-	// }
+  for _, result := range results {
+    fmt.Println(result)
+  }
 }

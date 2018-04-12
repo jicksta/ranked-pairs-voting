@@ -63,7 +63,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 
     Describe("#Tally1v1s()", func() {
 
-      var tally tally
+      var tally *tally
 
       BeforeEach(func() {
         tally = e.tally()
@@ -161,8 +161,8 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 
     Describe("#lockedPairs", func() {
 
-      var tally tally
-      var sorted RankedPairs
+      var tally *tally
+      var sorted *RankedPairs
 
       BeforeEach(func() {
         tally = e.tally()
@@ -170,7 +170,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
       })
 
       It("has the expected winner by highest magnitude", func() {
-        Expect(sorted[0]).To(Equal(RankablePair{
+        Expect((*sorted)[0]).To(Equal(RankablePair{
           A:      "FUDD_ELMIRA",
           B:      "RUHNER_ROD",
           FavorA: 1142,
@@ -203,7 +203,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
 
     Describe("#tally()", func() {
 
-      var tally tally
+      var tally *tally
 
       BeforeEach(func() {
         tally = e.tally()

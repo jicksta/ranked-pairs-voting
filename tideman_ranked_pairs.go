@@ -33,7 +33,9 @@ type RankablePair struct {
 
 type RankedPairs []RankablePair
 
-// Any "locked" pair that would create a cycle in the DAG must be ignored.
+// CyclicalPair represents a ranked pair that was ignored in the final sorting because it would have introduced a cycle
+// in the Directed Acyclic Graph of relative winners. These structs are supposed to be ignored and are only returned for
+// possible visualization purposes or other similar uses.
 type CyclicalPair struct {
   RankedPair            RankablePair
 
@@ -54,7 +56,7 @@ func (e *TidemanRankedPairsElection) Result() ([]string, []CyclicalPair) {
 }
 
 // tally counts how many times voters preferred choice A > B, B > A, and B = A
-func (e *TidemanRankedPairsElection) tally() tally {
+func (e *TidemanRankedPairsElection) tally() *tally {
   result := make(tally)
 
   for _, ballot := range e.Ballots {
@@ -67,7 +69,7 @@ func (e *TidemanRankedPairsElection) tally() tally {
     }
   }
 
-  return result
+  return &result
 }
 
 // runoffs generates a slice of ranked pairs for an individual ballot that expresses the ballot's
@@ -124,12 +126,12 @@ func (pair *RankablePair) victoryMagnitude() int64 {
 // consideration. If one of the victory-sorted locked ranked pairs would have created a cycle in the DAG, it is ignored
 // and returned in the final return value separately for potential visualization purposes. The DAG that this uses is
 // based on the gonum/graph library.
-func (pairs *RankedPairs) tsort() ([]string, []CyclicalPair) {
+func (pairs RankedPairs) tsort() ([]string, []CyclicalPair) {
 
   builder := newDAGBuilder()
   var cycles []CyclicalPair
 
-  for i, pair := range *pairs {
+  for i, pair := range pairs {
     if pair.FavorA > pair.FavorB {
       if err := builder.addEdge(pair.A, pair.B); err != nil {
         cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
@@ -156,7 +158,7 @@ func (pairs *RankedPairs) tsort() ([]string, []CyclicalPair) {
 
 // lockedPairs orders all of the pairs in the tally by their victoryMagnitude, counting ties as 1 vote for
 // both FavorA and FavorB.
-func (t *tally) lockedPairs() RankedPairs {
+func (t *tally) lockedPairs() *RankedPairs {
   var result []RankablePair // copy structs into result because we mutate FavorA and FavorB
   for aKey := range *t {
     for bKey := range (*t)[aKey] {
@@ -176,7 +178,8 @@ func (t *tally) lockedPairs() RankedPairs {
     return left.victoryMagnitude() >= right.victoryMagnitude()
   })
 
-  return result
+  rankedPairs := RankedPairs(result)
+  return &rankedPairs
 }
 
 // getPair handles auto-creation of the RankablePair if it didn't already exist and it
@@ -216,7 +219,7 @@ func (t *tally) incrementTies(first, second string) {
 }
 
 // Deserializes a file that has the following format: "<voteid> <choiceA> <choiceB> <choiceC>". Ties can be expressed as
-// "<choiceA>=<choiceB>". The returned value isn't as useful as the results of it which you can get by invoking Result()
+// "<choiceA>=<choiceB>". The returned struct isn't as useful as the results of it which you can get by invoking Result()
 func LoadElectionFile(filename string) TidemanRankedPairsElection {
   f, err := os.Open(filename)
   if err != nil {
@@ -261,6 +264,10 @@ func LoadElectionFile(filename string) TidemanRankedPairsElection {
     Choices:        choices,
     SourceFilename: filename,
   }
+}
+
+func (e *TidemanRankedPairsElection) GraphViz() {
+  e.tally().lockedPairs().tsort()
 }
 
 func orderStrings(first, second string) (string, string) {

@@ -11,48 +11,57 @@ import (
 
 type TidemanRankedPairsElection struct {
   Ballots        []Ballot
-  Candidates     []string
+  Choices        []string
   SourceFilename string
 }
 
+// Ballot represents an individual voter's preferences. Priorities are represented as a two-dimensional
+// slice because there can be ties between choices at the same priority.
 type Ballot struct {
-  VoterID string
-  Choices [][]string
+  VoterID    string
+  Priorities [][]string
 }
 
-type OneVersusOneVote struct {
+// RankablePair stores information about two choices relative to each other.
+type RankablePair struct {
   A      string
   B      string
-  FavorA int
-  FavorB int
-  Ties   int
+  FavorA int64
+  FavorB int64
+  Ties   int64
 }
 
-type VotesList []OneVersusOneVote
+type RankedPairs []RankablePair
 
-type DroppedVote struct {
-  // IndexDroppedAt refers to the index in the magnitude-sorted intermediate list of votes, not the final tsorted-results
-  IndexDroppedAt int
-  Vote           OneVersusOneVote
-}
-type tally map[string]map[string]*OneVersusOneVote
+// Any "locked" lockedPairs pair that would create a cycle in the DAG must be ignored.
+type DroppedPair struct {
+  RankedPair            RankablePair
 
-// Result returns a one-dimensional sorted list of candidates. In the future it may return a two-dimensional array to account for ties
-func (e *TidemanRankedPairsElection) Result() ([]string, []DroppedVote) {
-  tally := e.tally1v1s()
-  sorted := tally.sortedByMagnitudeVictory()
-  return sorted.tsort()
+  // OriginalRankDroppedAt refers to the index in the magnitude-sorted intermediate list of votes, not the final tsorted-results
+  OriginalRankDroppedAt int
 }
 
-func (e *TidemanRankedPairsElection) tally1v1s() tally {
+// tally is an internal type that auto-creates RankablePairs as needed and exposes methods
+// for incrementing counters given two choices' names in any order.
+type tally map[string]map[string]*RankablePair
+
+// Result returns a one-dimensional sorted list of choices.
+func (e *TidemanRankedPairsElection) Result() ([]string, []DroppedPair) {
+  tally := e.tally()
+  pairs := tally.lockedPairs()
+  return pairs.tsort()
+}
+
+// tally counts how many times voters preferred choice A > B, B > A, and B = A
+func (e *TidemanRankedPairsElection) tally() tally {
   result := make(tally)
 
   for _, ballot := range e.Ballots {
-    for _, eachBallotVote1v1 := range ballot.equivalentRoundRobinVotes() {
-      if eachBallotVote1v1.Ties == 1 {
-        result.incrementTies(eachBallotVote1v1.A, eachBallotVote1v1.B)
+    for _, ballotRankedPair := range ballot.runoffs() {
+      if ballotRankedPair.Ties == 1 {
+        result.incrementTies(ballotRankedPair.A, ballotRankedPair.B)
       } else {
-        result.incrementWinner(eachBallotVote1v1.A, eachBallotVote1v1.B)
+        result.incrementWinner(ballotRankedPair.A, ballotRankedPair.B)
       }
     }
   }
@@ -60,14 +69,17 @@ func (e *TidemanRankedPairsElection) tally1v1s() tally {
   return result
 }
 
-func (ballot *Ballot) equivalentRoundRobinVotes() []OneVersusOneVote {
-  var votes []OneVersusOneVote
-  for indexOuter, choiceOuter := range ballot.Choices {
+// runoffs generates a slice of ranked pairs for an individual ballot that express the ballot's
+// preferences if 1:1 runoff elections were ran for all choices against each other. This is one
+// of the defining features of a voting method that satisfies the "Condorcet criterion".
+func (ballot *Ballot) runoffs() []RankablePair {
+  var result []RankablePair
+  for indexOuter, choiceOuter := range ballot.Priorities {
 
     // First, add all ties to the slice we'll return at the end
     for tieOuterIndex := range choiceOuter {
       for tieInnerIndex := tieOuterIndex + 1; tieInnerIndex < len(choiceOuter); tieInnerIndex++ {
-        votes = append(votes, OneVersusOneVote{
+        result = append(result, RankablePair{
           A:      choiceOuter[tieOuterIndex],
           B:      choiceOuter[tieInnerIndex],
           FavorA: 0,
@@ -78,11 +90,13 @@ func (ballot *Ballot) equivalentRoundRobinVotes() []OneVersusOneVote {
     }
 
     // Second, add all non-ties across both dimensions (1st dimension = rank, 2nd dimension = file)
-    for indexInner := indexOuter + 1; indexInner < len(ballot.Choices); indexInner++ {
+    for indexInner := indexOuter + 1; indexInner < len(ballot.Priorities); indexInner++ {
       for _, eachWinningChoiceOfSamePriority := range choiceOuter {
-        for _, eachLosingChoiceOfSamePriority := range ballot.Choices[indexInner] {
-          // Personal votes are always votes for A, or ties, but never a vote for B over A
-          votes = append(votes, OneVersusOneVote{
+        for _, eachLosingChoiceOfSamePriority := range ballot.Priorities[indexInner] {
+          // Ballot RankablePairs are always votes for A, or ties, but never a vote for B over A. They also include
+          // combinations of A and B that would not be in the tally because the tally deterministically orders A and B
+          // lexicographically such that A vs B and B vs A both share the same RankablePair in the tally.
+          result = append(result, RankablePair{
             A:      eachWinningChoiceOfSamePriority,
             B:      eachLosingChoiceOfSamePriority,
             FavorA: 1,
@@ -92,95 +106,46 @@ func (ballot *Ballot) equivalentRoundRobinVotes() []OneVersusOneVote {
     }
 
   }
-  return votes
+  return result
 }
 
-func (vote *OneVersusOneVote) victoryMagnitude() int {
-  var delta = vote.FavorA - vote.FavorB
+// victoryMagnitude describes how much a winner won over loser. A tie is counted as 1 vote for both choices.
+func (pair *RankablePair) victoryMagnitude() int64 {
+  var delta = pair.FavorA - pair.FavorB
   if delta < 0 {
     delta = -delta
   }
   return delta
 }
 
-func (t *tally) lookup(first, second string) *OneVersusOneVote {
-  a, b := orderStrings(first, second)
-
-  if _, exists := (*t)[a]; !exists {
-    (*t)[a] = map[string]*OneVersusOneVote{}
-  }
-
-  var vote1v1 = (*t)[a][b]
-  if vote1v1 == nil {
-    vote1v1 = &OneVersusOneVote{A: a, B: b}
-    (*t)[a][b] = vote1v1
-  }
-
-  return vote1v1
-}
-
-func (t *tally) incrementWinner(winner, loser string) {
-  vote := t.lookup(winner, loser)
-
-  if vote.A == winner {
-    vote.FavorA++
-  } else if vote.B == winner {
-    vote.FavorB++
-  } else {
-    panic(fmt.Errorf("invalid winner string given %s for vote with A=%s and B=%s", winner, vote.A, vote.B))
-  }
-}
-
-func (t *tally) incrementTies(first, second string) {
-  vote := t.lookup(first, second)
-  vote.Ties++
-}
-
-func (t *tally) sortedByMagnitudeVictory() VotesList {
-  var result []OneVersusOneVote // don't use pointer array: copy into result because we mutate FavorA and FavorB
-  for aKey := range *t {
-    for bKey := range (*t)[aKey] {
-      result = append(result, *(*t)[aKey][bKey])
-    }
-  }
-
-  // For final counting purposes, we should add ties to both FavorA and FavorB
-  for i, vote := range result {
-    vote.FavorA += vote.Ties
-    vote.FavorB += vote.Ties
-    result[i] = vote
-  }
-
-  sort.SliceStable(result, func(i int, j int) bool {
-    leftVote, rightVote := result[i], result[j]
-    return leftVote.victoryMagnitude() >= rightVote.victoryMagnitude()
-  })
-
-  return result
-}
-
-func (votes *VotesList) tsort() ([]string, []DroppedVote) {
+// tsort uses a graph algorithm (a continuously topologically sorted Directed Acyclic Graph) to order the "locked"
+// ranked pairs from a tally (which were sorted only by victoryMagnitude) such that all preferences are taken into
+// consideration. If one of the victory-sorted locked ranked pairs would have created a cycle in the DAG, it is ignored
+// and returned in the final return value separately for potential visualization purposes. The DAG that this uses is
+// based on the gonum/graph library.
+func (pairs *RankedPairs) tsort() ([]string, []DroppedPair) {
 
   builder := NewDAGBuilder()
-  var dropped []DroppedVote
+  var dropped []DroppedPair
 
-  for i, vote := range *votes {
-    if vote.FavorA > vote.FavorB {
-      if err := builder.AddEdge(vote.A, vote.B); err != nil {
-        dropped = append(dropped, DroppedVote{i, vote})
+  for i, pair := range *pairs {
+    if pair.FavorA > pair.FavorB {
+      if err := builder.AddEdge(pair.A, pair.B); err != nil {
+        dropped = append(dropped, DroppedPair{RankedPair: pair, OriginalRankDroppedAt: i})
       }
-    } else if vote.FavorB > vote.FavorA {
-      if err := builder.AddEdge(vote.B, vote.A); err != nil {
-        dropped = append(dropped, DroppedVote{i, vote})
+    } else if pair.FavorB > pair.FavorA {
+      if err := builder.AddEdge(pair.B, pair.A); err != nil {
+        dropped = append(dropped, DroppedPair{RankedPair: pair, OriginalRankDroppedAt: i})
       }
     } else {
       // We got a tie. Try drawing directions between both
 
-      abEdgeErr := builder.AddEdge(vote.A, vote.B)
-      baEdgeErr := builder.AddEdge(vote.B, vote.A)
+      // TODO: if either of these fail, neither edge should be added?
+      abEdgeErr := builder.AddEdge(pair.A, pair.B)
+      baEdgeErr := builder.AddEdge(pair.B, pair.A)
 
       if abEdgeErr != nil || baEdgeErr != nil {
-        dropped = append(dropped, DroppedVote{i, vote})
+        dropped = append(dropped, DroppedPair{RankedPair: pair, OriginalRankDroppedAt: i})
       }
     }
   }
@@ -188,6 +153,69 @@ func (votes *VotesList) tsort() ([]string, []DroppedVote) {
   return builder.TSort(), dropped
 }
 
+// lockedPairs orders all of the pairs in the tally by their victoryMagnitude, counting ties as 1 vote for
+// both FavorA and FavorB.
+func (t *tally) lockedPairs() RankedPairs {
+  var result []RankablePair // copy structs into result because we mutate FavorA and FavorB
+  for aKey := range *t {
+    for bKey := range (*t)[aKey] {
+      result = append(result, *(*t)[aKey][bKey])
+    }
+  }
+
+  // For final counting purposes, we should add ties to both FavorA and FavorB
+  for i, pair := range result {
+    pair.FavorA += pair.Ties
+    pair.FavorB += pair.Ties
+    result[i] = pair
+  }
+
+  sort.SliceStable(result, func(i int, j int) bool {
+    left, right := result[i], result[j]
+    return left.victoryMagnitude() >= right.victoryMagnitude()
+  })
+
+  return result
+}
+
+// getPair handles auto-creation of the RankablePair if it didn't already exist and it
+// guarantees that getPair(a,b) and getPair(b,a) would return the exact same pointer.
+func (t *tally) getPair(first, second string) *RankablePair {
+  a, b := orderStrings(first, second)
+
+  if _, exists := (*t)[a]; !exists {
+    (*t)[a] = map[string]*RankablePair{}
+  }
+
+  var pair = (*t)[a][b]
+  if pair == nil {
+    pair = &RankablePair{A: a, B: b}
+    (*t)[a][b] = pair
+  }
+
+  return pair
+}
+
+// incrementWinner increments the count of winner's votes by 1 when given a winner and a loser,
+func (t *tally) incrementWinner(winner, loser string) {
+  pair := t.getPair(winner, loser)
+
+  if pair.A == winner {
+    pair.FavorA++
+  } else if pair.B == winner {
+    pair.FavorB++
+  } else {
+    panic(fmt.Errorf("invalid winner string given %s for pair with A=%s and B=%s", winner, pair.A, pair.B))
+  }
+}
+
+// incrementTies increments the Ties in the pair for two choices given in either order.
+func (t *tally) incrementTies(first, second string) {
+  t.getPair(first, second).Ties++
+}
+
+// Deserializes a file that has the following format: "<voteid> <choiceA> <choiceB> <choiceC>". Ties can be expressed as
+// "<choiceA>=<choiceB>". The returned value isn't as useful as the results of it which you can get by invoking Result()
 func LoadElectionFile(filename string) TidemanRankedPairsElection {
   f, err := os.Open(filename)
   if err != nil {
@@ -208,35 +236,35 @@ func LoadElectionFile(filename string) TidemanRankedPairsElection {
       prioritizedChoices = append(prioritizedChoices, potentialTies)
     }
     ballots = append(ballots, Ballot{
-      VoterID: voterID,
-      Choices: prioritizedChoices,
+      VoterID:    voterID,
+      Priorities: prioritizedChoices,
     })
   }
 
-  candidatesSet := make(map[string]bool)
-  for _, vote := range ballots {
-    for _, priorityChoices := range vote.Choices {
+  distinctChoicesSet := make(map[string]bool)
+  for _, ballot := range ballots {
+    for _, priorityChoices := range ballot.Priorities {
       for _, choice := range priorityChoices {
-        candidatesSet[choice] = true
+        distinctChoicesSet[choice] = true
       }
     }
   }
-  var candidates []string
-  for key := range candidatesSet {
-    candidates = append(candidates, key)
+  var choices []string
+  for key := range distinctChoicesSet {
+    choices = append(choices, key)
   }
-  sort.Strings(candidates) // Remove non-determinism introduced by the map
+  sort.Strings(choices) // Remove non-determinism introduced by the map
 
   return TidemanRankedPairsElection{
     Ballots:        ballots,
-    Candidates:     candidates,
+    Choices:        choices,
     SourceFilename: filename,
   }
 }
 
-func orderStrings(one, two string) (string, string) {
-  if strings.Compare(one, two) < 0 {
-    return one, two
+func orderStrings(first, second string) (string, string) {
+  if first < second {
+    return first, second
   }
-  return two, one
+  return second, first
 }

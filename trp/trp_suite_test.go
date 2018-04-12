@@ -8,5 +8,5 @@ import (
 
 func TestTrp(t *testing.T) {
   gomega.RegisterFailHandler(ginkgo.Fail)
-  ginkgo.RunSpecs(t, "Trp Suite")
+  ginkgo.RunSpecs(t, "TRP Suite")
 }

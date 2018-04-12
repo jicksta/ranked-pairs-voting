@@ -1,0 +1,81 @@
+<!doctype html>
+<html class="no-js" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title></title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+    .ballot {
+        display: inline-block;
+        border: 3px black solid;
+        margin: 3px;
+        padding: 0 10px 0 3px;
+        text-align: left;
+    }
+    .ballot h3, h2 {
+        text-align: center;
+    }
+    .ballot ol {
+        padding: 0 15px;
+    }
+    #votes { text-align: center
+    }
+</style>
+</head>
+<body>
+
+<h1>Tideman Ranked Pairs Voting System</h1>
+<h2>Ballots</h2>
+
+<div id="votes"></div>
+
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lodash@4.17.5/lodash.min.js"></script>
+
+<script id="vote-template" type="text/template">
+    <div class="ballot">
+        <h3><%= voterID %></h3>
+        <ol>
+            <% choices.forEach(function(choice) { %>
+            <li><%= choice %></li>
+            <% }); %>
+        </ol>
+    </div>
+</script>
+
+<script type="text/javascript">
+    const VOTES = [
+        ["VOTER_1", "RUHNER_ROD", "MOWZ_MIKE", "SAMM_YOSEM_T", "YOTE_WALLY_C", "DUCH_DAWN"],
+        ["VOTER_2", "RUHNER_ROD", "MOWZ_MIKE", "YOTE_WALLY_C", "SAMM_YOSEM_T", "DUCH_DAWN"],
+        ["VOTER_3", "RUHNER_ROD", "MOWZ_MIKE", "SAMM_YOSEM_T", "DUCH_DAWN", "YOTE_WALLY_C"],
+        ["VOTER_4", "RUHNER_ROD", "MOWZ_MIKE", "DUCH_DAWN", "SAMM_YOSEM_T", "YOTE_WALLY_C"],
+        ["VOTER_5", "MOWZ_MIKE", "DUCH_DAWN", "SAMM_YOSEM_T", "YOTE_WALLY_C", "RUHNER_ROD"],
+        ["VOTER_6", "SAMM_YOSEM_T", "MOWZ_MIKE", "YOTE_WALLY_C", "RUHNER_ROD", "DUCH_DAWN"],
+        ["VOTER_7", "YOTE_WALLY_C", "MOWZ_MIKE", "DUCH_DAWN", "SAMM_YOSEM_T", "RUHNER_ROD"],
+        ["VOTER_8", "SAMM_YOSEM_T", "MOWZ_MIKE", "DUCH_DAWN", "YOTE_WALLY_C", "RUHNER_ROD"],
+        ["VOTER_9", "YOTE_WALLY_C", "MOWZ_MIKE", "DUCH_DAWN", "SAMM_YOSEM_T", "RUHNER_ROD"],
+        ["VOTER_10", "DUCH_DAWN", "MOWZ_MIKE", "YOTE_WALLY_C", "SAMM_YOSEM_T", "RUHNER_ROD"],
+        ["VOTER_11", "SAMM_YOSEM_T", "DUCH_DAWN", "MOWZ_MIKE", "YOTE_WALLY_C", "RUHNER_ROD"],
+        ["VOTER_12", "RUHNER_ROD", "MOWZ_MIKE", "SAMM_YOSEM_T", "YOTE_WALLY_C", "DUCH_DAWN"],
+        ["VOTER_13", "RUHNER_ROD", "MOWZ_MIKE", "YOTE_WALLY_C", "SAMM_YOSEM_T", "DUCH_DAWN"],
+        ["VOTER_14", "RUHNER_ROD", "MOWZ_MIKE", "SAMM_YOSEM_T", "DUCH_DAWN", "YOTE_WALLY_C"],
+        ["VOTER_15", "RUHNER_ROD", "MOWZ_MIKE", "DUCH_DAWN", "SAMM_YOSEM_T", "YOTE_WALLY_C"],
+        ["VOTER_16", "MOWZ_MIKE", "DUCH_DAWN", "SAMM_YOSEM_T", "YOTE_WALLY_C", "RUHNER_ROD"],
+        ["VOTER_17", "SAMM_YOSEM_T", "MOWZ_MIKE", "YOTE_WALLY_C", "RUHNER_ROD", "DUCH_DAWN"],
+        ["VOTER_18", "YOTE_WALLY_C", "MOWZ_MIKE", "DUCH_DAWN", "SAMM_YOSEM_T", "RUHNER_ROD"],
+        ["VOTER_19", "SAMM_YOSEM_T", "MOWZ_MIKE", "DUCH_DAWN", "YOTE_WALLY_C", "RUHNER_ROD"],
+        ["VOTER_20", "YOTE_WALLY_C", "MOWZ_MIKE", "DUCH_DAWN", "SAMM_YOSEM_T", "RUHNER_ROD"],
+        ["VOTER_21", "DUCH_DAWN", "MOWZ_MIKE", "YOTE_WALLY_C", "SAMM_YOSEM_T", "RUHNER_ROD"],
+        ["VOTER_22", "DUCH_DAWN", "MOWZ_MIKE", "SAMM_YOSEM_T", "YOTE_WALLY_C", "RUHNER_ROD"]
+    ];
+
+    const voteTemplate = _.template($("#vote-template").text());
+    VOTES.forEach(ballot => {
+        $(voteTemplate({voterID: ballot[0], choices: ballot.slice(1)})).appendTo("#votes");
+    });
+</script>
+
+</body>
+</html>

@@ -1,4 +1,4 @@
-package trp_test
+package trp
 
 import (
   "testing"

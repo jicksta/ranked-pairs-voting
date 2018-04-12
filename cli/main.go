@@ -3,7 +3,7 @@ package main
 import (
   "os"
   "fmt"
-  "github.com/jicksta/ranked-pairs-voting/trp"
+  "github.com/jicksta/ranked-pairs-voting"
 )
 
 func main() {

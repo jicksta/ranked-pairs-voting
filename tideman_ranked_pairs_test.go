@@ -130,7 +130,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
   Describe("The Condorcet.ca workbench fixtures", func() {
 
     BeforeEach(func() {
-      e = LoadElectionFile("../support/fixtures/condorcet.ca/scenario1.txt")
+      e = LoadElectionFile("fixtures/condorcet.ca/scenario1.txt")
     })
 
     Context("scenario1", func() {
@@ -152,7 +152,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
   Context("scenario5", func() {
 
     BeforeEach(func() {
-      e = LoadElectionFile("../support/fixtures/condorcet.ca/scenario5.txt")
+      e = LoadElectionFile("fixtures/condorcet.ca/scenario5.txt")
     })
 
     It("has 2000 votes", func() {

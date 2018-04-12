@@ -1,9 +1,8 @@
-package trp_test
+package trp
 
 import (
   . "github.com/onsi/ginkgo"
   . "github.com/onsi/gomega"
-  . "github.com/jicksta/ranked-pairs-voting/trp"
 )
 
 var _ = Describe("DAGBuilder", func() {

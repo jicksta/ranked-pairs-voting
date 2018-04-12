@@ -125,24 +125,24 @@ func (pair *RankablePair) victoryMagnitude() int64 {
 // based on the gonum/graph library.
 func (pairs *RankedPairs) tsort() ([]string, []DroppedPair) {
 
-  builder := NewDAGBuilder()
+  builder := newDAGBuilder()
   var dropped []DroppedPair
 
   for i, pair := range *pairs {
     if pair.FavorA > pair.FavorB {
-      if err := builder.AddEdge(pair.A, pair.B); err != nil {
+      if err := builder.addEdge(pair.A, pair.B); err != nil {
         dropped = append(dropped, DroppedPair{RankedPair: pair, OriginalRankDroppedAt: i})
       }
     } else if pair.FavorB > pair.FavorA {
-      if err := builder.AddEdge(pair.B, pair.A); err != nil {
+      if err := builder.addEdge(pair.B, pair.A); err != nil {
         dropped = append(dropped, DroppedPair{RankedPair: pair, OriginalRankDroppedAt: i})
       }
     } else {
       // We got a tie. Try drawing directions between both
 
       // TODO: if either of these fail, neither edge should be added?
-      abEdgeErr := builder.AddEdge(pair.A, pair.B)
-      baEdgeErr := builder.AddEdge(pair.B, pair.A)
+      abEdgeErr := builder.addEdge(pair.A, pair.B)
+      baEdgeErr := builder.addEdge(pair.B, pair.A)
 
       if abEdgeErr != nil || baEdgeErr != nil {
         dropped = append(dropped, DroppedPair{RankedPair: pair, OriginalRankDroppedAt: i})
@@ -150,7 +150,7 @@ func (pairs *RankedPairs) tsort() ([]string, []DroppedPair) {
     }
   }
 
-  return builder.TSort(), dropped
+  return builder.tsort(), dropped
 }
 
 // lockedPairs orders all of the pairs in the tally by their victoryMagnitude, counting ties as 1 vote for

@@ -6,19 +6,19 @@ import (
   "gonum.org/v1/gonum/graph/topo"
 )
 
-type DAGBuilder struct {
+type dagBuilder struct {
   g         *simple.DirectedGraph
   nodeNames *map[int64]string
 }
 
-func NewDAGBuilder() *DAGBuilder {
-  return &DAGBuilder{
+func newDAGBuilder() *dagBuilder {
+  return &dagBuilder{
     g:         simple.NewDirectedGraph(),
     nodeNames: &map[int64]string{},
   }
 }
 
-func (builder *DAGBuilder) AddEdge(from, to string) error {
+func (builder *dagBuilder) addEdge(from, to string) error {
   g, fromNode, toNode := builder.g, nodeIDFromName(from), nodeIDFromName(to)
 
   if !g.Has(fromNode) {
@@ -48,10 +48,10 @@ func (builder *DAGBuilder) AddEdge(from, to string) error {
   return nil
 }
 
-func (builder *DAGBuilder) TSort() []string {
+func (builder *dagBuilder) tsort() []string {
   nodes, err := topo.Sort(builder.g)
   if err != nil {
-    panic(err) // This shouldn't ever happen because AddEdge guards new edges
+    panic(err) // This shouldn't ever happen because addEdge guards new edges
   }
   var names []string
   for _, node := range nodes {

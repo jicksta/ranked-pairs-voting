@@ -5,20 +5,20 @@ import (
   . "github.com/onsi/gomega"
 )
 
-var _ = Describe("DAGBuilder", func() {
+var _ = Describe("dagBuilder", func() {
 
-  var builder *DAGBuilder
+  var builder *dagBuilder
 
   BeforeEach(func() {
-    builder = NewDAGBuilder()
+    builder = newDAGBuilder()
   })
 
   It("reports new cycles", func() {
-    Expect(builder.AddEdge("A", "B")).To(Succeed())
-    Expect(builder.AddEdge("B", "C")).To(Succeed())
-    Expect(builder.AddEdge("C", "A")).NotTo(Succeed())
+    Expect(builder.addEdge("A", "B")).To(Succeed())
+    Expect(builder.addEdge("B", "C")).To(Succeed())
+    Expect(builder.addEdge("C", "A")).NotTo(Succeed())
 
-    Expect(builder.TSort()).To(Equal([]string{"A", "B", "C"}))
+    Expect(builder.tsort()).To(Equal([]string{"A", "B", "C"}))
   })
 
 })

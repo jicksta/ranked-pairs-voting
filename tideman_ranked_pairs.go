@@ -33,11 +33,12 @@ type RankablePair struct {
 
 type RankedPairs []RankablePair
 
-// Any "locked" lockedPairs pair that would create a cycle in the DAG must be ignored.
-type DroppedPair struct {
+// Any "locked" pair that would create a cycle in the DAG must be ignored.
+type CyclicalPair struct {
   RankedPair            RankablePair
 
-  // OriginalRankDroppedAt refers to the index in the magnitude-sorted intermediate list of votes, not the final tsorted-results
+  // OriginalRankDroppedAt refers to the index in the victoryMagnitude-sorted intermediate list of votes, not the index
+  // in the final tsorted array returned from Result()
   OriginalRankDroppedAt int
 }
 
@@ -45,8 +46,8 @@ type DroppedPair struct {
 // for incrementing counters given two choices' names in any order.
 type tally map[string]map[string]*RankablePair
 
-// Result returns a one-dimensional sorted list of choices.
-func (e *TidemanRankedPairsElection) Result() ([]string, []DroppedPair) {
+// Result returns a one-dimensional sorted slice of choices.
+func (e *TidemanRankedPairsElection) Result() ([]string, []CyclicalPair) {
   tally := e.tally()
   pairs := tally.lockedPairs()
   return pairs.tsort()
@@ -69,7 +70,7 @@ func (e *TidemanRankedPairsElection) tally() tally {
   return result
 }
 
-// runoffs generates a slice of ranked pairs for an individual ballot that express the ballot's
+// runoffs generates a slice of ranked pairs for an individual ballot that expresses the ballot's
 // preferences if 1:1 runoff elections were ran for all choices against each other. This is one
 // of the defining features of a voting method that satisfies the "Condorcet criterion".
 func (ballot *Ballot) runoffs() []RankablePair {
@@ -123,19 +124,19 @@ func (pair *RankablePair) victoryMagnitude() int64 {
 // consideration. If one of the victory-sorted locked ranked pairs would have created a cycle in the DAG, it is ignored
 // and returned in the final return value separately for potential visualization purposes. The DAG that this uses is
 // based on the gonum/graph library.
-func (pairs *RankedPairs) tsort() ([]string, []DroppedPair) {
+func (pairs *RankedPairs) tsort() ([]string, []CyclicalPair) {
 
   builder := newDAGBuilder()
-  var dropped []DroppedPair
+  var cycles []CyclicalPair
 
   for i, pair := range *pairs {
     if pair.FavorA > pair.FavorB {
       if err := builder.addEdge(pair.A, pair.B); err != nil {
-        dropped = append(dropped, DroppedPair{RankedPair: pair, OriginalRankDroppedAt: i})
+        cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
       }
     } else if pair.FavorB > pair.FavorA {
       if err := builder.addEdge(pair.B, pair.A); err != nil {
-        dropped = append(dropped, DroppedPair{RankedPair: pair, OriginalRankDroppedAt: i})
+        cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
       }
     } else {
       // We got a tie. Try drawing directions between both
@@ -145,12 +146,12 @@ func (pairs *RankedPairs) tsort() ([]string, []DroppedPair) {
       baEdgeErr := builder.addEdge(pair.B, pair.A)
 
       if abEdgeErr != nil || baEdgeErr != nil {
-        dropped = append(dropped, DroppedPair{RankedPair: pair, OriginalRankDroppedAt: i})
+        cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
       }
     }
   }
 
-  return builder.tsort(), dropped
+  return builder.tsort(), cycles
 }
 
 // lockedPairs orders all of the pairs in the tally by their victoryMagnitude, counting ties as 1 vote for

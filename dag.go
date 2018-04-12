@@ -4,13 +4,17 @@ import (
   "hash/fnv"
   "gonum.org/v1/gonum/graph/simple"
   "gonum.org/v1/gonum/graph/topo"
+  "gonum.org/v1/gonum/graph/encoding/dot"
 )
 
+// dagBuilder is a specialized simple Directed Acyclic Graph object that treats node IDs as strings and guarantees no
+// cycles are introduced to the directed graph.
 type dagBuilder struct {
   g         *simple.DirectedGraph
   nodeNames *map[int64]string
 }
 
+// newDAGBuilder instantiates a new dagBuilder object
 func newDAGBuilder() *dagBuilder {
   return &dagBuilder{
     g:         simple.NewDirectedGraph(),
@@ -18,25 +22,28 @@ func newDAGBuilder() *dagBuilder {
   }
 }
 
+// addEdge idempotently creates an edge in the graph between two nodes (created just-in-time). If the new edge would
+// have introduced a cycle in the graph, it will not be added and an error will be returned instead.
 func (builder *dagBuilder) addEdge(from, to string) error {
-  g, fromNode, toNode := builder.g, nodeIDFromName(from), nodeIDFromName(to)
+  g, fromID, toID := builder.g, nodeIDFromName(from), nodeIDFromName(to)
+  fromNode, toNode := simple.Node(fromID), simple.Node(toID)
 
-  if !g.Has(fromNode) {
-    g.AddNode(simple.Node(fromNode))
-    (*builder.nodeNames)[fromNode] = from
+  if !g.Has(fromID) {
+    g.AddNode(fromNode)
+    (*builder.nodeNames)[fromID] = from
   }
 
-  if !g.Has(toNode) {
-    g.AddNode(simple.Node(toNode))
-    (*builder.nodeNames)[toNode] = to
+  if !g.Has(toID) {
+    g.AddNode(toNode)
+    (*builder.nodeNames)[toID] = to
   }
 
   newEdge := simple.Edge{
-    F: simple.Node(fromNode),
-    T: simple.Node(toNode),
+    F: fromNode,
+    T: toNode,
   }
 
-  if !g.HasEdgeFromTo(fromNode, toNode) {
+  if !g.HasEdgeFromTo(fromID, toID) {
     g.SetEdge(newEdge)
   }
 
@@ -48,6 +55,12 @@ func (builder *dagBuilder) addEdge(from, to string) error {
   return nil
 }
 
+// hasEdge returns true if `from` is connected to `to`
+func (builder *dagBuilder) hasEdge(from, to string) bool {
+  return builder.g.HasEdgeFromTo(nodeIDFromName(from), nodeIDFromName(to))
+}
+
+// tsort topologically sorts the DAG into a single-dimensional slice of strings
 func (builder *dagBuilder) tsort() []string {
   nodes, err := topo.Sort(builder.g)
   if err != nil {
@@ -61,6 +74,14 @@ func (builder *dagBuilder) tsort() []string {
   return names
 }
 
+// graphViz returns a DOT-format "encoding" of the DAG for visualizing with GraphViz
+func (builder *dagBuilder) graphViz() string {
+  out, _ := dot.Marshal(builder.g, "Election", "", "  ", false)
+  return string(out)
+}
+
+// nodeIDFromName deterministically converts a string to a unique int64 using a hash function. gonum graphs only
+// support int64 node IDs.
 func nodeIDFromName(name string) int64 {
   hasher := fnv.New64a()
   hasher.Write([]byte(name))

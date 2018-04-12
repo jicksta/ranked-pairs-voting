@@ -13,12 +13,16 @@ var _ = Describe("dagBuilder", func() {
     builder = newDAGBuilder()
   })
 
-  It("reports new cycles", func() {
-    Expect(builder.addEdge("A", "B")).To(Succeed())
-    Expect(builder.addEdge("B", "C")).To(Succeed())
-    Expect(builder.addEdge("C", "A")).NotTo(Succeed())
+  Describe("#addEdge", func() {
 
-    Expect(builder.tsort()).To(Equal([]string{"A", "B", "C"}))
+    It("reports new cycles", func() {
+      Expect(builder.addEdge("A", "B")).To(Succeed())
+      Expect(builder.addEdge("B", "C")).To(Succeed())
+      Expect(builder.addEdge("C", "A")).NotTo(Succeed())
+
+      Expect(builder.tsort()).To(Equal([]string{"A", "B", "C"}))
+    })
+
   })
 
 })

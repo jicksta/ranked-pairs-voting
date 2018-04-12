@@ -40,7 +40,7 @@ type CyclicalPair struct {
   RankedPair            RankablePair
 
   // OriginalRankDroppedAt refers to the index in the victoryMagnitude-sorted intermediate list of votes, not the index
-  // in the final tsorted array returned from Result()
+  // in the final tsorted array returned from Result(). This value is zero-indexed.
   OriginalRankDroppedAt int
 }
 
@@ -141,15 +141,8 @@ func (pairs RankedPairs) tsort() ([]string, []CyclicalPair) {
         cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
       }
     } else {
-      // We got a tie. Try drawing directions between both
-
-      // TODO: if either of these fail, neither edge should be added?
-      abEdgeErr := builder.addEdge(pair.A, pair.B)
-      baEdgeErr := builder.addEdge(pair.B, pair.A)
-
-      if abEdgeErr != nil || baEdgeErr != nil {
-        cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
-      }
+      // We got a tie. Two nodes can't be bidirected peers in a DAG because it would be considered a cycle.
+      cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
     }
   }
 

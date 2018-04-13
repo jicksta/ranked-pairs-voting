@@ -6,9 +6,9 @@ import (
   . "github.com/onsi/gomega"
 )
 
-var _ = Describe("TidemanRankedPairsElection", func() {
+var _ = Describe("CompletedElection", func() {
 
-  var e TidemanRankedPairsElection
+  var e CompletedElection
 
   Describe("tally", func() {
     Describe("getPair", func() {
@@ -30,7 +30,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
   Describe("#runoffs()", func() {
 
     BeforeEach(func() {
-      e = TidemanRankedPairsElection{
+      e = CompletedElection{
         Choices: []string{"A", "B", "C", "D"},
         Ballots: []Ballot{
           {
@@ -92,7 +92,7 @@ var _ = Describe("TidemanRankedPairsElection", func() {
     })
 
     BeforeEach(func() {
-      e = TidemanRankedPairsElection{
+      e = CompletedElection{
         Choices: []string{"A", "B", "C", "D"},
         Ballots: []Ballot{
           {

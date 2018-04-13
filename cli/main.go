@@ -9,7 +9,7 @@ import (
 func main() {
   filename := os.Args[1]
   election := trp.LoadElectionFile(filename)
-  results, _ := election.Result()
+  results, _ := election.Results()
 
   fmt.Print("Results:\n\n")
 

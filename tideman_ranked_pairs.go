@@ -9,11 +9,25 @@ import (
   "bufio"
 )
 
-type TidemanRankedPairsElection struct {
+type CompletedElection struct {
   Ballots        []Ballot
   Choices        []string
   SourceFilename string
 }
+
+/*
+type ContinuousElection interface {
+  AddBallot(Ballot)
+  RemoveVoter(string)
+  Results() ([]string, []CyclicalPair)
+}
+type ElectionPersister interface {
+  AddVote(Ballot)
+  UpdateVote(Ballot)
+  RemoveVote(string)
+  SaveResults(ElectionResults)
+}
+*/
 
 // Ballot represents an individual voter's preferences. Priorities are represented as a two-dimensional
 // slice because there can be ties between choices at the same priority.
@@ -40,7 +54,7 @@ type CyclicalPair struct {
   RankedPair            RankablePair
 
   // OriginalRankDroppedAt refers to the index in the victoryMagnitude-sorted intermediate list of votes, not the index
-  // in the final tsorted array returned from Result(). This value is zero-indexed.
+  // in the final tsorted array returned from Results(). This value is zero-indexed.
   OriginalRankDroppedAt int
 }
 
@@ -48,28 +62,28 @@ type CyclicalPair struct {
 // for incrementing counters given two choices' names in any order.
 type tally map[string]map[string]*RankablePair
 
-// Result returns a one-dimensional sorted slice of choices.
-func (e *TidemanRankedPairsElection) Result() ([]string, []CyclicalPair) {
+// Results returns a one-dimensional sorted slice of choices.
+func (e *CompletedElection) Results() ([]string, []CyclicalPair) {
   tally := e.tally()
   pairs := tally.lockedPairs()
   return pairs.tsort()
 }
 
 // tally counts how many times voters preferred choice A > B, B > A, and B = A
-func (e *TidemanRankedPairsElection) tally() *tally {
-  result := make(tally)
+func (e *CompletedElection) tally() *tally {
+  t := make(tally)
 
   for _, ballot := range e.Ballots {
     for _, ballotRankedPair := range ballot.runoffs() {
       if ballotRankedPair.Ties == 1 {
-        result.incrementTies(ballotRankedPair.A, ballotRankedPair.B)
+        t.incrementTies(ballotRankedPair.A, ballotRankedPair.B)
       } else {
-        result.incrementWinner(ballotRankedPair.A, ballotRankedPair.B)
+        t.incrementWinner(ballotRankedPair.A, ballotRankedPair.B)
       }
     }
   }
 
-  return &result
+  return &t
 }
 
 // runoffs generates a slice of ranked pairs for an individual ballot that expresses the ballot's
@@ -212,8 +226,8 @@ func (t *tally) incrementTies(first, second string) {
 }
 
 // Deserializes a file that has the following format: "<voteid> <choiceA> <choiceB> <choiceC>". Ties can be expressed as
-// "<choiceA>=<choiceB>". The returned struct isn't as useful as the results of it which you can get by invoking Result()
-func LoadElectionFile(filename string) TidemanRankedPairsElection {
+// "<choiceA>=<choiceB>". The returned struct isn't as useful as the results of it which you can get by invoking Results()
+func LoadElectionFile(filename string) CompletedElection {
   f, err := os.Open(filename)
   if err != nil {
     panic(err)
@@ -252,14 +266,14 @@ func LoadElectionFile(filename string) TidemanRankedPairsElection {
   }
   sort.Strings(choices) // Remove non-determinism introduced by the map
 
-  return TidemanRankedPairsElection{
+  return CompletedElection{
     Ballots:        ballots,
     Choices:        choices,
     SourceFilename: filename,
   }
 }
 
-func (e *TidemanRankedPairsElection) GraphViz() {
+func (e *CompletedElection) GraphViz() {
   e.tally().lockedPairs().tsort()
 }
 

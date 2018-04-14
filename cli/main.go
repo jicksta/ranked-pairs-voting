@@ -23,19 +23,25 @@ Number of choices: %d
 Number of votes:   %d
 Time to calculate: %s
 
-Number of cyclical locked pairs: %d
 Algorithm: Tideman Ranked Pairs (TRP)
+Number of cyclical locked pairs: %d`,
+    len(election.Choices),
+    len(election.Ballots),
+    executionDuration,
+    len(results.RankedPairs.CyclicalLockedPairsIndices))
 
+  fmt.Print("\n\n\nRanked Pairs Data:\n\n")
+  results.RankedPairs.PrintTable(os.Stdout)
 
-Tally Data:
-`, len(election.Choices), len(election.Ballots), executionDuration, len(results.RankedPairs.CyclicalLockedPairsIndices))
-
+  fmt.Print("\n\nTally Data:\n\n")
   results.PrintTally(os.Stdout)
+
   fmt.Println(`
-The tally data contains information about the 1:1 "runoff" elections that Ranked Pairs simulates, consistent
-with the "Condorcet criterion". A table cell with the following text "A=3  B=2  (1)" would indicate that, in a
-runoff election between A and B, there are 3 votes for A over B, 2 votes for B over A, and 1 tie. A and B 
-refer to the names listed in the column and row headers.`)
+The tally data contains information about the 1:1 "runoff" elections that Ranked Pairs simulates, consistent with the
+Condorcet criterion. A table cell with the following text "A=3  B=2  (1)" would indicate that, in a runoff election
+between A and B, there are 3 votes for A over B, 2 votes for B over A, and 1 tie. A and B refer to the names listed in
+the column and row headers.`)
+
 }
 
 func electionFromFile(filename string) *trp.CompletedElection {

@@ -7,8 +7,8 @@ import (
   "regexp"
   "sort"
   "bufio"
-  "github.com/olekukonko/tablewriter"
   "io"
+  "github.com/olekukonko/tablewriter"
 )
 
 // Ballot represents an individual voter's preferences. Priorities are represented as a two-dimensional
@@ -299,6 +299,8 @@ func (t *Tally) Matrix() *TallyMatrix {
 func (e *CompletedElectionResults) PrintTally(writer io.Writer) {
   t := e.Tally.Matrix()
   table := tablewriter.NewWriter(writer)
+  table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+  table.SetCenterSeparator("|")
 
   var headingsWithPrefixes = []string{"A"}
   for _, header := range t.Headings {
@@ -312,7 +314,7 @@ func (e *CompletedElectionResults) PrintTally(writer io.Writer) {
     var cells = []string{"A=" + strings.ToUpper(rowChoice)}
     for j, pair := range rowPairs {
       if pair == nil {
-        cells = append(cells, "-")
+        cells = append(cells, "")
         continue
       }
       columnChoice := t.Headings[j]
@@ -328,9 +330,34 @@ func (e *CompletedElectionResults) PrintTally(writer io.Writer) {
     table.Append(cells)
   }
 
-  //winners, _ := t.Tally.Election.Results()
-  //table.SetFooter(append([]string{"WINNERS"}, winners...))
-  //table.SetFooter(winners)
+  table.Render()
+}
+
+func (rp *RankedPairs) PrintTable(writer io.Writer) {
+  table := tablewriter.NewWriter(writer)
+  table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+  table.SetCenterSeparator("|")
+  table.SetHeader([]string{"Rank", "A", "B", "# A", "# B", "# Ties", "Cyclical?", "Victory Magnitude"})
+
+  for i, pair := range *rp.LockedPairs {
+    var isCyclical bool
+    for _, cyclicalIndex := range rp.CyclicalLockedPairsIndices {
+      if i == cyclicalIndex {
+        isCyclical = true
+        break
+      }
+    }
+    table.Append([]string{
+      fmt.Sprint(i+1),
+      pair.A,
+      pair.B,
+      fmt.Sprint(pair.FavorA),
+      fmt.Sprint(pair.FavorB),
+      fmt.Sprint(pair.Ties),
+      fmt.Sprint(isCyclical),
+      fmt.Sprint(pair.VictoryMagnitude()),
+    })
+  }
 
   table.Render()
 }

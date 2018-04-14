@@ -221,7 +221,6 @@ var _ = Describe("CompletedElection", func() {
   Describe("sortedUniques()", func() {
     It("returns the sorted unique strings sent to the chan", func() {
       actual := sortedUniques(func(q chan<- string) {
-        defer close(q)
         q <- "Jay"
         q <- "Phillips"
         q <- "Jay"

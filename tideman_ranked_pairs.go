@@ -267,7 +267,6 @@ func (t *Tally) incrementTies(first, second string) {
 
 func (t *Tally) knownChoices() []string {
   return sortedUniques(func(q chan<- string) {
-    defer close(q)
     for outerKey := range *t.pairs {
       q <- outerKey
       for innerKey := range (*t.pairs)[outerKey] {
@@ -368,8 +367,10 @@ func (rp *RankedPairs) PrintTable(writer io.Writer) {
 //
 // Ties can be expressed as <choiceA>=<choiceB>. For example:
 //
-//     VOTER_JAY  Finn=Jake  Bubblegum=Lemongrab  Marceline  IceKing=Gunter
+//     VOTER_JAY  Finn=Jake  Bubblegum=Lemongrab  Marceline  IceKing
 //
+// In this example above, Finn and Jake are tied for 1st place, Bubblegum and Lemongrab
+// are tied for 2nd, and Marceline and IceKing are 3rd and 4th places, respectively
 func ReadElection(reader io.Reader) (*CompletedElection, error) {
   var ballots []Ballot
   scanner := bufio.NewScanner(reader)
@@ -390,7 +391,6 @@ func ReadElection(reader io.Reader) (*CompletedElection, error) {
   }
 
   choices := sortedUniques(func(q chan<- string) {
-    defer close(q)
     for _, ballot := range ballots {
       for _, priorityChoices := range ballot.Priorities {
         for _, choice := range priorityChoices {
@@ -414,13 +414,16 @@ func orderStrings(first, second string) (string, string) {
   return second, first
 }
 
-// sortedUniques invokes chanFn with a "chan string" that MUST be closed by the function. Returns sorted slice of unique strings sent.
+// sortedUniques invokes chanReceiver with a `chan string`. It returns a sorted slice of unique strings sent to the chan
 func sortedUniques(chanReceiver func(chan<- string)) []string {
-  q := make(chan string)
-  go chanReceiver(q)
+  Q := make(chan string)
+  go func() {
+    chanReceiver(Q)
+    close(Q)
+  }()
 
   set := make(map[string]bool)
-  for str := range q {
+  for str := range Q {
     set[str] = true
   }
 

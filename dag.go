@@ -60,7 +60,7 @@ func (builder *dagBuilder) hasEdge(from, to string) bool {
   return builder.g.HasEdgeFromTo(nodeIDFromName(from), nodeIDFromName(to))
 }
 
-// tsort topologically sorts the DAG into a single-dimensional slice of strings
+// Sort topologically sorts the DAG into a single-dimensional slice of strings
 func (builder *dagBuilder) tsort() []string {
   nodes, err := topo.Sort(builder.g)
   if err != nil {

@@ -7,6 +7,8 @@ import (
   "sort"
   "os"
   "bufio"
+  "github.com/olekukonko/tablewriter"
+  "io"
 )
 
 type CompletedElection struct {
@@ -51,30 +53,36 @@ type RankedPairs []RankablePair
 // in the Directed Acyclic Graph of relative winners. These structs are supposed to be ignored and are only returned for
 // possible visualization purposes or other similar uses.
 type CyclicalPair struct {
-  RankedPair            RankablePair
+  RankedPair RankablePair
 
-  // OriginalRankDroppedAt refers to the index in the victoryMagnitude-sorted intermediate list of votes, not the index
+  // OriginalRankDroppedAt refers to the index in the VictoryMagnitude-sorted intermediate list of votes, not the index
   // in the final tsorted array returned from Results(). This value is zero-indexed.
   OriginalRankDroppedAt int
 }
 
-// tally is an internal type that auto-creates RankablePairs as needed and exposes methods
+// Tally auto-creates RankablePairs as needed and exposes methods
 // for incrementing counters given two choices' names in any order.
-type tally map[string]map[string]*RankablePair
+type Tally struct {
+  election *CompletedElection
+  pairs    *map[string]map[string]*RankablePair
+}
 
 // Results returns a one-dimensional sorted slice of choices.
 func (e *CompletedElection) Results() ([]string, []CyclicalPair) {
   tally := e.tally()
-  pairs := tally.lockedPairs()
-  return pairs.tsort()
+
+  tally.Matrix().Print(os.Stdout) /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  pairs := tally.LockedPairs()
+  rankedChoices, cycles := pairs.Sort()
+  return rankedChoices, cycles
 }
 
-// tally counts how many times voters preferred choice A > B, B > A, and B = A
-func (e *CompletedElection) tally() *tally {
-  t := make(tally)
-
+// Tally counts how many times voters preferred choice A > B, B > A, and B = A
+func (e *CompletedElection) tally() *Tally {
+  t := newTally(e)
   for _, ballot := range e.Ballots {
-    for _, ballotRankedPair := range ballot.runoffs() {
+    for _, ballotRankedPair := range ballot.Runoffs() {
       if ballotRankedPair.Ties == 1 {
         t.incrementTies(ballotRankedPair.A, ballotRankedPair.B)
       } else {
@@ -83,13 +91,13 @@ func (e *CompletedElection) tally() *tally {
     }
   }
 
-  return &t
+  return t
 }
 
-// runoffs generates a slice of ranked pairs for an individual ballot that expresses the ballot's
+// Runoffs generates a slice of ranked pairs for an individual ballot that expresses the ballot's
 // preferences if 1:1 runoff elections were ran for all choices against each other. This is one
 // of the defining features of a voting method that satisfies the "Condorcet criterion".
-func (ballot *Ballot) runoffs() []RankablePair {
+func (ballot *Ballot) Runoffs() []RankablePair {
   var result []RankablePair
   for indexOuter, choiceOuter := range ballot.Priorities {
 
@@ -111,8 +119,8 @@ func (ballot *Ballot) runoffs() []RankablePair {
       for _, eachWinningChoiceOfSamePriority := range choiceOuter {
         for _, eachLosingChoiceOfSamePriority := range ballot.Priorities[indexInner] {
           // Ballot RankablePairs are always votes for A, or ties, but never a vote for B over A. They also include
-          // combinations of A and B that would not be in the tally because the tally deterministically orders A and B
-          // lexicographically such that A vs B and B vs A both share the same RankablePair in the tally.
+          // combinations of A and B that would not be in the Tally because the Tally deterministically orders A and B
+          // lexicographically such that A vs B and B vs A both share the same RankablePair in the Tally.
           result = append(result, RankablePair{
             A:      eachWinningChoiceOfSamePriority,
             B:      eachLosingChoiceOfSamePriority,
@@ -126,8 +134,8 @@ func (ballot *Ballot) runoffs() []RankablePair {
   return result
 }
 
-// victoryMagnitude describes how much a winner won over loser. A tie is counted as 1 vote for both choices.
-func (pair *RankablePair) victoryMagnitude() int64 {
+// VictoryMagnitude describes how much a winner won over loser. A tie is counted as 1 vote for both choices.
+func (pair *RankablePair) VictoryMagnitude() int64 {
   var delta = pair.FavorA - pair.FavorB
   if delta < 0 {
     delta = -delta
@@ -135,13 +143,12 @@ func (pair *RankablePair) victoryMagnitude() int64 {
   return delta
 }
 
-// tsort uses a graph algorithm (a continuously topologically sorted Directed Acyclic Graph) to order the "locked"
-// ranked pairs from a tally (which were sorted only by victoryMagnitude) such that all preferences are taken into
+// Sort uses a graph algorithm (a continuously topologically sorted Directed Acyclic Graph) to order the "locked"
+// ranked pairs from a Tally (which were sorted only by VictoryMagnitude) such that all preferences are taken into
 // consideration. If one of the victory-sorted locked ranked pairs would have created a cycle in the DAG, it is ignored
 // and returned in the final return value separately for potential visualization purposes. The DAG that this uses is
 // based on the gonum/graph library.
-func (pairs RankedPairs) tsort() ([]string, []CyclicalPair) {
-
+func (pairs RankedPairs) Sort() ([]string, []CyclicalPair) {
   builder := newDAGBuilder()
   var cycles []CyclicalPair
 
@@ -155,7 +162,7 @@ func (pairs RankedPairs) tsort() ([]string, []CyclicalPair) {
         cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
       }
     } else {
-      // We got a tie. Two nodes can't be bidirected peers in a DAG because it would be considered a cycle.
+      // We got a tie. Two nodes can't be bi-directed peers in a DAG because it would be considered a cycle.
       cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
     }
   }
@@ -163,13 +170,23 @@ func (pairs RankedPairs) tsort() ([]string, []CyclicalPair) {
   return builder.tsort(), cycles
 }
 
-// lockedPairs orders all of the pairs in the tally by their victoryMagnitude, counting ties as 1 vote for
+
+// Tally counts how many times voters preferred choice A > B, B > A, and B = A
+func newTally(e *CompletedElection) *Tally {
+  pairs := make(map[string]map[string]*RankablePair)
+  return &Tally{
+    election: e,
+    pairs:    &pairs,
+  }
+}
+
+// LockedPairs orders all of the pairs in the Tally by their VictoryMagnitude, counting ties as 1 vote for
 // both FavorA and FavorB.
-func (t *tally) lockedPairs() *RankedPairs {
+func (t *Tally) LockedPairs() *RankedPairs {
   var result []RankablePair // copy structs into result because we mutate FavorA and FavorB
-  for aKey := range *t {
-    for bKey := range (*t)[aKey] {
-      result = append(result, *(*t)[aKey][bKey])
+  for aKey := range *t.pairs {
+    for bKey := range (*t.pairs)[aKey] {
+      result = append(result, *(*t.pairs)[aKey][bKey])
     }
   }
 
@@ -182,34 +199,34 @@ func (t *tally) lockedPairs() *RankedPairs {
 
   sort.SliceStable(result, func(i int, j int) bool {
     left, right := result[i], result[j]
-    return left.victoryMagnitude() >= right.victoryMagnitude()
+    return left.VictoryMagnitude() >= right.VictoryMagnitude()
   })
 
   rankedPairs := RankedPairs(result)
   return &rankedPairs
 }
 
-// getPair handles auto-creation of the RankablePair if it didn't already exist and it
-// guarantees that getPair(a,b) and getPair(b,a) would return the exact same pointer.
-func (t *tally) getPair(first, second string) *RankablePair {
+// GetPair handles auto-creation of the RankablePair if it didn't already exist and it
+// guarantees that GetPair(a,b) and GetPair(b,a) would return the exact same pointer.
+func (t *Tally) GetPair(first, second string) *RankablePair {
   a, b := orderStrings(first, second)
 
-  if _, exists := (*t)[a]; !exists {
-    (*t)[a] = map[string]*RankablePair{}
+  if _, exists := (*t.pairs)[a]; !exists {
+    (*t.pairs)[a] = map[string]*RankablePair{}
   }
 
-  var pair = (*t)[a][b]
+  var pair = (*t.pairs)[a][b]
   if pair == nil {
     pair = &RankablePair{A: a, B: b}
-    (*t)[a][b] = pair
+    (*t.pairs)[a][b] = pair
   }
 
   return pair
 }
 
 // incrementWinner increments the count of winner's votes by 1 when given a winner and a loser,
-func (t *tally) incrementWinner(winner, loser string) {
-  pair := t.getPair(winner, loser)
+func (t *Tally) incrementWinner(winner, loser string) {
+  pair := t.GetPair(winner, loser)
 
   if pair.A == winner {
     pair.FavorA++
@@ -221,12 +238,79 @@ func (t *tally) incrementWinner(winner, loser string) {
 }
 
 // incrementTies increments the Ties in the pair for two choices given in either order.
-func (t *tally) incrementTies(first, second string) {
-  t.getPair(first, second).Ties++
+func (t *Tally) incrementTies(first, second string) {
+  t.GetPair(first, second).Ties++
 }
 
-// Deserializes a file that has the following format: "<voteid> <choiceA> <choiceB> <choiceC>". Ties can be expressed as
-// "<choiceA>=<choiceB>". The returned struct isn't as useful as the results of it which you can get by invoking Results()
+type TallyMatrix struct {
+  // Headings uses the same order (lexicographically sorted) for rows and columns.
+  Headings []string
+
+  // RowsColumns 1st dimension is the X axis, 2nd dimension is Y (i.e. individual cells). When X = Y, the pointer will be nil
+  RowsColumns [][]*RankablePair
+
+  // Tally stores a reference to the tally used to generate this Matrix
+  Tally *Tally
+}
+
+func (t *Tally) Matrix() *TallyMatrix {
+  var headings = t.election.Choices
+  var rowsColumns [][]*RankablePair
+
+  for _, yChoice := range headings {
+    var row []*RankablePair
+    for _, xChoice := range headings {
+      if yChoice == xChoice {
+        row = append(row, nil)
+      } else {
+        row = append(row, t.GetPair(yChoice, xChoice))
+      }
+    }
+    rowsColumns = append(rowsColumns, row)
+  }
+  return &TallyMatrix{Headings: headings, RowsColumns: rowsColumns}
+}
+
+func (t *TallyMatrix) Print(writer io.Writer) {
+  table := tablewriter.NewWriter(writer)
+
+  var headingsWithPrefixes = []string {"A"}
+  for _, header := range t.Headings {
+    headingsWithPrefixes = append(headingsWithPrefixes, "B=" + header)
+  }
+  table.SetHeader(headingsWithPrefixes)
+
+  for i, rowChoice := range t.Headings {
+    rowPairs := t.RowsColumns[i]
+
+    var cells = []string {"A=" + rowChoice}
+    for j, pair := range rowPairs {
+      if pair == nil {
+        cells = append(cells, "")
+        continue
+      }
+      columnChoice :=  t.Headings[j]
+      var cellText string
+      if columnChoice == pair.A {
+        cellText = fmt.Sprintf("A=%d B=%d (%d)", pair.FavorA, pair.FavorB, pair.Ties)
+      } else {
+        cellText = fmt.Sprintf("A=%d B=%d (%d)", pair.FavorB, pair.FavorA, pair.Ties)
+      }
+      cells = append(cells, cellText)
+    }
+
+    table.Append(cells)
+  }
+
+  //winners, _ := t.Tally.Election.Results()
+  //table.SetFooter(append([]string{"WINNERS"}, winners...))
+  //table.SetFooter(winners)
+
+  table.Render()
+}
+
+// Deserializes a file that has the following format: `<voteid> <choiceA> <choiceB> <choiceC>`. Ties can be expressed as
+// `<choiceA>=<choiceB>`. The returned struct isn't as useful as the results of it which you can get by invoking `Results()`
 func LoadElectionFile(filename string) CompletedElection {
   f, err := os.Open(filename)
   if err != nil {
@@ -273,9 +357,9 @@ func LoadElectionFile(filename string) CompletedElection {
   }
 }
 
-func (e *CompletedElection) GraphViz() {
-  e.tally().lockedPairs().tsort()
-}
+//func (e *CompletedElection) GraphViz() {
+//  e.tally().LockedPairs().Sort() // TODO
+//}
 
 func orderStrings(first, second string) (string, string) {
   if first < second {

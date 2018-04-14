@@ -12,8 +12,8 @@ func main() {
   results, _ := election.Results()
 
   fmt.Print("Results:\n\n")
-
   for _, result := range results {
     fmt.Println(result)
   }
+  //election.Results()
 }

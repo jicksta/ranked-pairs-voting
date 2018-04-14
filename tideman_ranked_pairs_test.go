@@ -10,13 +10,13 @@ var _ = Describe("CompletedElection", func() {
 
   var e CompletedElection
 
-  Describe("tally", func() {
-    Describe("getPair", func() {
+  Describe("Tally", func() {
+    Describe("GetPair", func() {
       It("guarantees a unique RankablePair for two candidates, irrespective of order passed in", func() {
-        tally := make(tally)
-        ba := tally.getPair("B", "A")
-        ab := tally.getPair("A", "B")
-        abAgain := tally.getPair("A", "B")
+        tally := newTally(nil)
+        ba := tally.GetPair("B", "A")
+        ab := tally.GetPair("A", "B")
+        abAgain := tally.GetPair("A", "B")
 
         Expect(ab).To(BeIdenticalTo(ba))
         Expect(ab).To(BeIdenticalTo(abAgain))
@@ -27,7 +27,7 @@ var _ = Describe("CompletedElection", func() {
 
   })
 
-  Describe("#runoffs()", func() {
+  Describe("#Runoffs()", func() {
 
     BeforeEach(func() {
       e = CompletedElection{
@@ -47,7 +47,7 @@ var _ = Describe("CompletedElection", func() {
     })
 
     It("computes OneVersusOneVotes according to Condorcet rules", func() {
-      Expect(e.Ballots[0].runoffs()).To(Equal([]RankablePair{
+      Expect(e.Ballots[0].Runoffs()).To(Equal([]RankablePair{
         rankablePair("A", "B", false),
         rankablePair("A", "C", false),
         rankablePair("A", "D", false),
@@ -63,7 +63,7 @@ var _ = Describe("CompletedElection", func() {
 
     Describe("#Tally1v1s()", func() {
 
-      var tally *tally
+      var tally *Tally
 
       BeforeEach(func() {
         tally = e.tally()
@@ -71,7 +71,7 @@ var _ = Describe("CompletedElection", func() {
 
       DescribeTable("tallies FavorA, FavorB, and Ties correctly",
         func(first, second string, favorFirst, favorSecond, ties int) {
-          vote := tally.getPair(first, second)
+          vote := tally.GetPair(first, second)
 
           if first == vote.B {
             favorFirst, favorSecond = favorSecond, favorFirst
@@ -159,14 +159,14 @@ var _ = Describe("CompletedElection", func() {
       Expect(e.Ballots).To(HaveLen(2000))
     })
 
-    Describe("#lockedPairs", func() {
+    Describe("#LockedPairs", func() {
 
-      var tally *tally
+      var tally *Tally
       var sorted *RankedPairs
 
       BeforeEach(func() {
         tally = e.tally()
-        sorted = tally.lockedPairs()
+        sorted = tally.LockedPairs()
       })
 
       It("has the expected winner by highest magnitude", func() {
@@ -180,7 +180,7 @@ var _ = Describe("CompletedElection", func() {
       })
 
       It("calculates the expected winners", func() {
-        result, dropped := sorted.tsort()
+        result, dropped := sorted.Sort()
         var droppedPairs []RankablePair
 
         for _, drop := range dropped {
@@ -201,9 +201,9 @@ var _ = Describe("CompletedElection", func() {
 
     })
 
-    Describe("#tally()", func() {
+    Describe("#Tally()", func() {
 
-      var tally *tally
+      var tally *Tally
 
       BeforeEach(func() {
         tally = e.tally()
@@ -211,7 +211,7 @@ var _ = Describe("CompletedElection", func() {
 
       DescribeTable("tallies FavorA, FavorB, and Ties correctly",
         func(first, second string, favorFirst, favorSecond, ties int) {
-          vote := tally.getPair(first, second)
+          vote := tally.GetPair(first, second)
 
           if first == vote.B {
             favorFirst, favorSecond = favorSecond, favorFirst

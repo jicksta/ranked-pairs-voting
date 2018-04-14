@@ -1,3 +1,4 @@
+// Working implementation of the Tideman Ranked Pairs (TRP) Condorcet voting method
 package trp
 
 import (
@@ -5,37 +6,41 @@ import (
   "strings"
   "regexp"
   "sort"
-  "os"
   "bufio"
   "github.com/olekukonko/tablewriter"
   "io"
 )
-
-type CompletedElection struct {
-  Ballots        []Ballot
-  Choices        []string
-  SourceFilename string
-}
-
-/*
-type ContinuousElection interface {
-  AddBallot(Ballot)
-  RemoveVoter(string)
-  Results() ([]string, []CyclicalPair)
-}
-type ElectionPersister interface {
-  AddVote(Ballot)
-  UpdateVote(Ballot)
-  RemoveVote(string)
-  SaveResults(ElectionResults)
-}
-*/
 
 // Ballot represents an individual voter's preferences. Priorities are represented as a two-dimensional
 // slice because there can be ties between choices at the same priority.
 type Ballot struct {
   VoterID    string
   Priorities [][]string
+}
+
+// CompletedElection holds ballot data and a de-normalized sorted list of choices found in the ballots. To get the
+// results of the election, call Results() on this object.
+type CompletedElection struct {
+  Ballots        []Ballot
+  Choices        []string
+}
+
+// CompletedElectionResults has rich informational byproducts of the algorithm, as well as the final Winners sorted in
+// descending order of priority.
+type CompletedElectionResults struct {
+
+  // Winners contains the election choices sorted from greatest winner to worst loser. This value is provided for
+  // convenience since it is also in the RankedPairs object.
+  Winners []string
+
+  // Election is a reference to the CompletedElection that generated these results
+  Election *CompletedElection
+
+  // Tally contains rich data about all combinations of Condorcet runoff elections as RankablePairs
+  Tally *Tally
+
+  // RankablePairs contains rich data about the sorting process performed with data from the Tally.
+  RankedPairs *RankedPairs
 }
 
 // RankablePair stores information about two choices relative to each other.
@@ -47,40 +52,56 @@ type RankablePair struct {
   Ties   int64
 }
 
-type RankedPairs []RankablePair
+// RankedPairs contains rich data about the final sorting process performed with data from the Tally. Note: The slice
+// of Winners in this object will be the same as the Winners list in the CompletedElectionResults struct.
+type RankedPairs struct {
+  // Winners contains the election choices sorted from greatest winner to worst loser
+  Winners []string
 
-// CyclicalPair represents a ranked pair that was ignored in the final sorting because it would have introduced a cycle
-// in the Directed Acyclic Graph of relative winners. These structs are supposed to be ignored and are only returned for
-// possible visualization purposes or other similar uses.
-type CyclicalPair struct {
-  RankedPair RankablePair
+  // lockedPairs contains all RankablePairs from the Tally sorted by VictoryMagnitude. Note: The order of this may be
+  // very different from Winners, and this will any RankablePairs that were ignored in the final sorting process because
+  // they would have introduced a cycle in the Directed Acyclic Graph of winning pairs. See CyclicalLockedPairsIndices
+  // for the indices in this slice of RankablePairs that cause cycles, if you care about such things.
+  LockedPairs *[]RankablePair
 
-  // OriginalRankDroppedAt refers to the index in the VictoryMagnitude-sorted intermediate list of votes, not the index
-  // in the final tsorted array returned from Results(). This value is zero-indexed.
-  OriginalRankDroppedAt int
+  // CyclicalLockedPairsIndices holds the indices of members of lockedPairs that cause cycles
+  CyclicalLockedPairsIndices []int
 }
 
 // Tally auto-creates RankablePairs as needed and exposes methods
 // for incrementing counters given two choices' names in any order.
 type Tally struct {
-  election *CompletedElection
-  pairs    *map[string]map[string]*RankablePair
+  pairs *map[string]map[string]*RankablePair
 }
 
-// Results returns a one-dimensional sorted slice of choices.
-func (e *CompletedElection) Results() ([]string, []CyclicalPair) {
+// TallyMatrix is helpful for visualizing the Tally.
+type TallyMatrix struct {
+  // Headings uses the same order (lexicographically sorted) for rows and columns.
+  Headings []string
+
+  // RowsColumns 1st dimension is the X axis, 2nd dimension is Y (i.e. individual cells). When X = Y, the pointer will be nil
+  RowsColumns [][]*RankablePair
+
+  // Tally stores a reference to the tally used to generate this Matrix
+  Tally *Tally
+}
+
+// Results returns rich information about the final CompletedElection results.
+func (e *CompletedElection) Results() *CompletedElectionResults {
   tally := e.tally()
+  rankedPairs := tally.RankedPairs()
 
-  tally.Matrix().Print(os.Stdout) /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  pairs := tally.LockedPairs()
-  rankedChoices, cycles := pairs.Sort()
-  return rankedChoices, cycles
+  return &CompletedElectionResults{
+    Winners:     rankedPairs.Winners,
+    Election:    e,
+    Tally:       tally,
+    RankedPairs: rankedPairs,
+  }
 }
 
 // Tally counts how many times voters preferred choice A > B, B > A, and B = A
 func (e *CompletedElection) tally() *Tally {
-  t := newTally(e)
+  t := newTally()
   for _, ballot := range e.Ballots {
     for _, ballotRankedPair := range ballot.Runoffs() {
       if ballotRankedPair.Ties == 1 {
@@ -143,46 +164,49 @@ func (pair *RankablePair) VictoryMagnitude() int64 {
   return delta
 }
 
-// Sort uses a graph algorithm (a continuously topologically sorted Directed Acyclic Graph) to order the "locked"
+// RankedPairs uses a graph algorithm (a continuously topologically sorted Directed Acyclic Graph) to order the "locked"
 // ranked pairs from a Tally (which were sorted only by VictoryMagnitude) such that all preferences are taken into
 // consideration. If one of the victory-sorted locked ranked pairs would have created a cycle in the DAG, it is ignored
 // and returned in the final return value separately for potential visualization purposes. The DAG that this uses is
 // based on the gonum/graph library.
-func (pairs RankedPairs) Sort() ([]string, []CyclicalPair) {
-  builder := newDAGBuilder()
-  var cycles []CyclicalPair
+func (t *Tally) RankedPairs() *RankedPairs {
+  lockedPairs := t.lockedPairs()
 
-  for i, pair := range pairs {
+  builder := newDAGBuilder()
+  var cycles []int
+
+  for i, pair := range *lockedPairs {
     if pair.FavorA > pair.FavorB {
       if err := builder.addEdge(pair.A, pair.B); err != nil {
-        cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
+        cycles = append(cycles, i)
       }
     } else if pair.FavorB > pair.FavorA {
       if err := builder.addEdge(pair.B, pair.A); err != nil {
-        cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
+        cycles = append(cycles, i)
       }
     } else {
       // We got a tie. Two nodes can't be bi-directed peers in a DAG because it would be considered a cycle.
-      cycles = append(cycles, CyclicalPair{RankedPair: pair, OriginalRankDroppedAt: i})
+      cycles = append(cycles, i)
     }
   }
 
-  return builder.tsort(), cycles
-}
-
-
-// Tally counts how many times voters preferred choice A > B, B > A, and B = A
-func newTally(e *CompletedElection) *Tally {
-  pairs := make(map[string]map[string]*RankablePair)
-  return &Tally{
-    election: e,
-    pairs:    &pairs,
+  return &RankedPairs{
+    Winners:                    builder.tsort(),
+    LockedPairs:                lockedPairs,
+    CyclicalLockedPairsIndices: cycles,
   }
 }
 
-// LockedPairs orders all of the pairs in the Tally by their VictoryMagnitude, counting ties as 1 vote for
+func newTally() *Tally {
+  pairs := make(map[string]map[string]*RankablePair)
+  return &Tally{
+    pairs: &pairs,
+  }
+}
+
+// lockedPairs orders all of the pairs in the Tally by their VictoryMagnitude, counting ties as 1 vote for
 // both FavorA and FavorB.
-func (t *Tally) LockedPairs() *RankedPairs {
+func (t *Tally) lockedPairs() *[]RankablePair {
   var result []RankablePair // copy structs into result because we mutate FavorA and FavorB
   for aKey := range *t.pairs {
     for bKey := range (*t.pairs)[aKey] {
@@ -202,8 +226,7 @@ func (t *Tally) LockedPairs() *RankedPairs {
     return left.VictoryMagnitude() >= right.VictoryMagnitude()
   })
 
-  rankedPairs := RankedPairs(result)
-  return &rankedPairs
+  return &result
 }
 
 // GetPair handles auto-creation of the RankablePair if it didn't already exist and it
@@ -242,19 +265,21 @@ func (t *Tally) incrementTies(first, second string) {
   t.GetPair(first, second).Ties++
 }
 
-type TallyMatrix struct {
-  // Headings uses the same order (lexicographically sorted) for rows and columns.
-  Headings []string
-
-  // RowsColumns 1st dimension is the X axis, 2nd dimension is Y (i.e. individual cells). When X = Y, the pointer will be nil
-  RowsColumns [][]*RankablePair
-
-  // Tally stores a reference to the tally used to generate this Matrix
-  Tally *Tally
+func (t *Tally) knownChoices() []string {
+  return sortedUniques(func(q chan<- string) {
+    defer close(q)
+    for outerKey := range *t.pairs {
+      q <- outerKey
+      for innerKey := range (*t.pairs)[outerKey] {
+        q <- innerKey
+      }
+    }
+  })
 }
 
 func (t *Tally) Matrix() *TallyMatrix {
-  var headings = t.election.Choices
+  var headings = t.knownChoices()
+
   var rowsColumns [][]*RankablePair
 
   for _, yChoice := range headings {
@@ -271,30 +296,31 @@ func (t *Tally) Matrix() *TallyMatrix {
   return &TallyMatrix{Headings: headings, RowsColumns: rowsColumns}
 }
 
-func (t *TallyMatrix) Print(writer io.Writer) {
+func (e *CompletedElectionResults) PrintTally(writer io.Writer) {
+  t := e.Tally.Matrix()
   table := tablewriter.NewWriter(writer)
 
-  var headingsWithPrefixes = []string {"A"}
+  var headingsWithPrefixes = []string{"A"}
   for _, header := range t.Headings {
-    headingsWithPrefixes = append(headingsWithPrefixes, "B=" + header)
+    headingsWithPrefixes = append(headingsWithPrefixes, "B="+header)
   }
   table.SetHeader(headingsWithPrefixes)
 
   for i, rowChoice := range t.Headings {
     rowPairs := t.RowsColumns[i]
 
-    var cells = []string {"A=" + rowChoice}
+    var cells = []string{"A=" + strings.ToUpper(rowChoice)}
     for j, pair := range rowPairs {
       if pair == nil {
-        cells = append(cells, "")
+        cells = append(cells, "-")
         continue
       }
-      columnChoice :=  t.Headings[j]
+      columnChoice := t.Headings[j]
       var cellText string
       if columnChoice == pair.A {
-        cellText = fmt.Sprintf("A=%d B=%d (%d)", pair.FavorA, pair.FavorB, pair.Ties)
+        cellText = fmt.Sprintf("A=%d  B=%d  (%d)", pair.FavorA, pair.FavorB, pair.Ties)
       } else {
-        cellText = fmt.Sprintf("A=%d B=%d (%d)", pair.FavorB, pair.FavorA, pair.Ties)
+        cellText = fmt.Sprintf("A=%d  B=%d  (%d)", pair.FavorB, pair.FavorA, pair.Ties)
       }
       cells = append(cells, cellText)
     }
@@ -309,17 +335,17 @@ func (t *TallyMatrix) Print(writer io.Writer) {
   table.Render()
 }
 
-// Deserializes a file that has the following format: `<voteid> <choiceA> <choiceB> <choiceC>`. Ties can be expressed as
-// `<choiceA>=<choiceB>`. The returned struct isn't as useful as the results of it which you can get by invoking `Results()`
-func LoadElectionFile(filename string) CompletedElection {
-  f, err := os.Open(filename)
-  if err != nil {
-    panic(err)
-  }
-  defer f.Close()
-
+// ReadElection deserializes a CompletedElection from a Reader using the following format:
+//
+//     <voterID> <choiceA> <choiceB> <choiceC>
+//
+// Ties can be expressed as <choiceA>=<choiceB>. For example:
+//
+//     VOTER_JAY  Finn=Jake  Bubblegum=Lemongrab  Marceline  IceKing=Gunter
+//
+func ReadElection(reader io.Reader) (*CompletedElection, error) {
   var ballots []Ballot
-  scanner := bufio.NewScanner(bufio.NewReader(f))
+  scanner := bufio.NewScanner(reader)
   whitespaceSeparator := regexp.MustCompile("\\s+")
   for scanner.Scan() {
     nextLine := scanner.Text()
@@ -336,34 +362,47 @@ func LoadElectionFile(filename string) CompletedElection {
     })
   }
 
-  distinctChoicesSet := make(map[string]bool)
-  for _, ballot := range ballots {
-    for _, priorityChoices := range ballot.Priorities {
-      for _, choice := range priorityChoices {
-        distinctChoicesSet[choice] = true
+  choices := sortedUniques(func(q chan<- string) {
+    defer close(q)
+    for _, ballot := range ballots {
+      for _, priorityChoices := range ballot.Priorities {
+        for _, choice := range priorityChoices {
+          q <- choice
+        }
       }
     }
-  }
-  var choices []string
-  for key := range distinctChoicesSet {
-    choices = append(choices, key)
-  }
-  sort.Strings(choices) // Remove non-determinism introduced by the map
+  })
 
-  return CompletedElection{
+  return &CompletedElection{
     Ballots:        ballots,
     Choices:        choices,
-    SourceFilename: filename,
-  }
+  }, nil
 }
 
-//func (e *CompletedElection) GraphViz() {
-//  e.tally().LockedPairs().Sort() // TODO
-//}
-
+// orderStrings returns two strings in lexicographical order when given two strings in any order.
 func orderStrings(first, second string) (string, string) {
   if first < second {
     return first, second
   }
   return second, first
+}
+
+// sortedUniques invokes chanFn with a "chan string" that MUST be closed by the function. Returns sorted slice of unique strings sent.
+func sortedUniques(chanReceiver func(chan<- string)) []string {
+  q := make(chan string)
+  go chanReceiver(q)
+
+  set := make(map[string]bool)
+  for str := range q {
+    set[str] = true
+  }
+
+  var strs []string
+  for key := range set {
+    strs = append(strs, key)
+  }
+
+  sort.Strings(strs)
+
+  return strs
 }

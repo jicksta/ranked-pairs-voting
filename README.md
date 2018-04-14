@@ -10,9 +10,8 @@ This implementation was not based on any other code reference: just the Wikipedi
 
 ## Future plans
 
-* Document all the things
-* Find more gnarly edge cases and write tests for them to guarantee the algorithm works correctly
 * Support dynamic ballot collection and result ordering
 * Add new package that can read and write to Postgres or BoltDB for persistent dynamic votes
 * Support Keybase signature public keys as voter IDs and de-duplicate ballots using public keys
 * RESTful and PubSub microservices for realtime voting
+* Find even more gnarly edge cases and write tests for them to guarantee the algorithm works correctly

@@ -16,7 +16,7 @@ var _ = Describe("CompletedElection", func() {
     BeforeEach(func() {
       e = &CompletedElection{
         Choices: []string{"A", "B", "C", "D"},
-        Ballots: []Ballot{
+        Ballots: []*Ballot{
           {
             VoterID: "ONE",
             Priorities: [][]string{
@@ -79,7 +79,7 @@ var _ = Describe("CompletedElection", func() {
       BeforeEach(func() {
         e = &CompletedElection{
           Choices: []string{"A", "B", "C", "D"},
-          Ballots: []Ballot{
+          Ballots: []*Ballot{
             {
               VoterID: "ONE",
               Priorities: [][]string{
@@ -170,9 +170,9 @@ var _ = Describe("CompletedElection", func() {
               droppedPairs = append(droppedPairs, (*ranked.LockedPairs)[cyclicalIndex])
             }
 
-            Expect(ranked.Winners).To(Equal([]string{
-              "FUDD_ELMIRA", "COYOTE_WALLY", "BYRD_TWEE_T", "MOWZ_MICHAEL", "SAM_YOSEMITE",
-              "RUHNER_ROD", "DUCH_DAWN", "BUNNY_B", "MOWZ_MINERVA", "CAT_SYLVESTER_T",
+            Expect(ranked.Winners).To(Equal([][]string{
+              {"FUDD_ELMIRA"}, {"COYOTE_WALLY"}, {"BYRD_TWEE_T"}, {"MOWZ_MICHAEL"}, {"SAM_YOSEMITE"},
+              {"RUHNER_ROD"}, {"DUCH_DAWN"}, {"BUNNY_B"}, {"MOWZ_MINERVA"}, {"CAT_SYLVESTER_T"},
             }))
 
             Expect(droppedPairs).To(Equal([]RankablePair{
@@ -230,6 +230,19 @@ var _ = Describe("CompletedElection", func() {
       Expect(actual).To(Equal([]string {"Jay", "Phillips", "bar", "foo"})) // go string sorting collates according to ASCII char values (capitals earlier)
     })
   })
+
+  Describe("Results()", func() {
+    It("groups ties", func() {
+      e = NewElection("e", []*Ballot{
+        {VoterID:"ONE",   Priorities:[][]string{{"A"}, {"B"}, {"C"}}},
+        {VoterID:"TWO",   Priorities:[][]string{{"B"}, {"A"}, {"C"}}},
+        {VoterID:"THREE", Priorities:[][]string{{"C"}, {"A", "B"}}},
+      })
+
+      Expect(e.Results().Winners()).To(Equal([][]string{{"A", "B"}, {"C"}}))
+    })
+  })
+
 })
 
 var _ = Describe("Tally", func() {
@@ -267,6 +280,6 @@ func rankablePair(winner, loser string, isTie bool) RankablePair {
 func loadElectionFile(filename string) *CompletedElection {
   f, _ := os.Open(filename)
   defer f.Close()
-  election, _ := ReadElection(f)
+  election, _ := ReadElection(filename, f)
   return election
 }

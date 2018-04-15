@@ -11,6 +11,17 @@ import (
   "github.com/olekukonko/tablewriter"
 )
 
+type ElectionPersistence interface {
+  GetElections() []string
+  GetElection(string) (*CompletedElection, error)
+
+  CreateElection(string, []*Ballot) (*CompletedElection, error)
+  RemoveElection(string)
+
+  SaveBallot(string, *Ballot) (*CompletedElectionResults, error)
+  RemoveBallot(string, string) (*CompletedElectionResults, error)
+}
+
 // Ballot represents an individual voter's preferences. Priorities are represented as a two-dimensional
 // slice because there can be ties between choices at the same priority.
 type Ballot struct {
@@ -21,17 +32,14 @@ type Ballot struct {
 // CompletedElection holds ballot data and a de-normalized sorted list of choices found in the ballots. To get the
 // results of the election, call Results() on this object.
 type CompletedElection struct {
-  Ballots        []Ballot
-  Choices        []string
+  ElectionID string
+  Ballots    []*Ballot
+  Choices    []string
 }
 
 // CompletedElectionResults has rich informational byproducts of the algorithm, as well as the final Winners sorted in
 // descending order of priority.
 type CompletedElectionResults struct {
-
-  // Winners contains the election choices sorted from greatest winner to worst loser. This value is provided for
-  // convenience since it is also in the RankedPairs object.
-  Winners []string
 
   // Election is a reference to the CompletedElection that generated these results
   Election *CompletedElection
@@ -55,8 +63,9 @@ type RankablePair struct {
 // RankedPairs contains rich data about the final sorting process performed with data from the Tally. Note: The slice
 // of Winners in this object will be the same as the Winners list in the CompletedElectionResults struct.
 type RankedPairs struct {
-  // Winners contains the election choices sorted from greatest winner to worst loser
-  Winners []string
+  // Winners contains the election choices sorted from greatest winners to worst losers. Ties are grouped in the second
+  // dimension slice, sorted lexicographically.
+  Winners [][]string
 
   // lockedPairs contains all RankablePairs from the Tally sorted by VictoryMagnitude. Note: The order of this may be
   // very different from Winners, and this will any RankablePairs that were ignored in the final sorting process because
@@ -92,11 +101,15 @@ func (e *CompletedElection) Results() *CompletedElectionResults {
   rankedPairs := tally.RankedPairs()
 
   return &CompletedElectionResults{
-    Winners:     rankedPairs.Winners,
     Election:    e,
     Tally:       tally,
     RankedPairs: rankedPairs,
   }
+}
+
+// Winners is just a convenience method for accessing CompletedElectionResults.RankedPairs.Winners
+func (r *CompletedElectionResults) Winners() [][]string {
+  return r.RankedPairs.Winners
 }
 
 // Tally counts how many times voters preferred choice A > B, B > A, and B = A
@@ -172,16 +185,16 @@ func (pair *RankablePair) VictoryMagnitude() int64 {
 func (t *Tally) RankedPairs() *RankedPairs {
   lockedPairs := t.lockedPairs()
 
-  builder := newDAGBuilder()
+  dagBuilder := newDAGBuilder()
   var cycles []int
 
   for i, pair := range *lockedPairs {
     if pair.FavorA > pair.FavorB {
-      if err := builder.addEdge(pair.A, pair.B); err != nil {
+      if err := dagBuilder.addEdge(pair.A, pair.B); err != nil {
         cycles = append(cycles, i)
       }
     } else if pair.FavorB > pair.FavorA {
-      if err := builder.addEdge(pair.B, pair.A); err != nil {
+      if err := dagBuilder.addEdge(pair.B, pair.A); err != nil {
         cycles = append(cycles, i)
       }
     } else {
@@ -190,8 +203,32 @@ func (t *Tally) RankedPairs() *RankedPairs {
     }
   }
 
+  var sortedWinners = dagBuilder.tsort()
+  var groupedWinners [][]string
+  for ; len(sortedWinners) > 0; {
+    if len(sortedWinners) == 1 {
+      groupedWinners = append(groupedWinners, []string{sortedWinners[0]})
+      break
+    }
+    var lastIndexWithSameRank = 0
+    for innerIndex := 1; innerIndex < len(sortedWinners); innerIndex++ {
+      pair := t.GetPair(sortedWinners[0], sortedWinners[innerIndex])
+      if pair.FavorA == pair.FavorB {
+        lastIndexWithSameRank = innerIndex
+      } else {
+        break
+      }
+    }
+
+    sameRankGroup := sortedWinners[:1+lastIndexWithSameRank]
+    sort.Strings(sameRankGroup)
+    groupedWinners = append(groupedWinners, sameRankGroup)
+
+    sortedWinners = sortedWinners[1+lastIndexWithSameRank:]
+  }
+
   return &RankedPairs{
-    Winners:                    builder.tsort(),
+    Winners:                    groupedWinners,
     LockedPairs:                lockedPairs,
     CyclicalLockedPairsIndices: cycles,
   }
@@ -295,20 +332,22 @@ func (t *Tally) Matrix() *TallyMatrix {
   return &TallyMatrix{Headings: headings, RowsColumns: rowsColumns}
 }
 
-func (e *CompletedElectionResults) PrintTally(writer io.Writer) {
-  t := e.Tally.Matrix()
+func (t *Tally) PrintTable(writer io.Writer) {
+  matrix := t.Matrix()
   table := tablewriter.NewWriter(writer)
+
+  // Configure for Markdown table formatting
   table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
   table.SetCenterSeparator("|")
 
   var headingsWithPrefixes = []string{"A"}
-  for _, header := range t.Headings {
+  for _, header := range matrix.Headings {
     headingsWithPrefixes = append(headingsWithPrefixes, "B="+header)
   }
   table.SetHeader(headingsWithPrefixes)
 
-  for i, rowChoice := range t.Headings {
-    rowPairs := t.RowsColumns[i]
+  for i, rowChoice := range matrix.Headings {
+    rowPairs := matrix.RowsColumns[i]
 
     var cells = []string{"A=" + strings.ToUpper(rowChoice)}
     for j, pair := range rowPairs {
@@ -316,7 +355,7 @@ func (e *CompletedElectionResults) PrintTally(writer io.Writer) {
         cells = append(cells, "")
         continue
       }
-      columnChoice := t.Headings[j]
+      columnChoice := matrix.Headings[j]
       var cellText string
       if columnChoice == pair.A {
         cellText = fmt.Sprintf("A=%d  B=%d  (%d)", pair.FavorA, pair.FavorB, pair.Ties)
@@ -334,9 +373,11 @@ func (e *CompletedElectionResults) PrintTally(writer io.Writer) {
 
 func (rp *RankedPairs) PrintTable(writer io.Writer) {
   table := tablewriter.NewWriter(writer)
+  table.SetHeader([]string{"Rank", "A", "B", "# A", "# B", "# Ties", "Cyclical?", "Won by"})
+
+  // Configure for Markdown table formatting
   table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
   table.SetCenterSeparator("|")
-  table.SetHeader([]string{"Rank", "A", "B", "# A", "# B", "# Ties", "Cyclical?", "Victory Magnitude"})
 
   for i, pair := range *rp.LockedPairs {
     var isCyclical bool
@@ -347,7 +388,7 @@ func (rp *RankedPairs) PrintTable(writer io.Writer) {
       }
     }
     table.Append([]string{
-      fmt.Sprint(i+1),
+      fmt.Sprint(i + 1),
       pair.A,
       pair.B,
       fmt.Sprint(pair.FavorA),
@@ -370,9 +411,9 @@ func (rp *RankedPairs) PrintTable(writer io.Writer) {
 //     VOTER_JAY  Finn=Jake  Bubblegum=Lemongrab  Marceline  IceKing
 //
 // In this example above, Finn and Jake are tied for 1st place, Bubblegum and Lemongrab
-// are tied for 2nd, and Marceline and IceKing are 3rd and 4th places, respectively
-func ReadElection(reader io.Reader) (*CompletedElection, error) {
-  var ballots []Ballot
+// are tied for 2nd, and Marceline and IceKing are 3rd and 4th places, respectively.
+func ReadElection(electionID string, reader io.Reader) (*CompletedElection, error) {
+  var ballots []*Ballot
   scanner := bufio.NewScanner(reader)
   whitespaceSeparator := regexp.MustCompile("\\s+")
   for scanner.Scan() {
@@ -384,12 +425,16 @@ func ReadElection(reader io.Reader) (*CompletedElection, error) {
       potentialTies := strings.Split(token, "=")
       prioritizedChoices = append(prioritizedChoices, potentialTies)
     }
-    ballots = append(ballots, Ballot{
+    ballots = append(ballots, &Ballot{
       VoterID:    voterID,
       Priorities: prioritizedChoices,
     })
   }
 
+  return NewElection(electionID, ballots), nil
+}
+
+func NewElection(electionID string, ballots []*Ballot) *CompletedElection {
   choices := sortedUniques(func(q chan<- string) {
     for _, ballot := range ballots {
       for _, priorityChoices := range ballot.Priorities {
@@ -399,11 +444,11 @@ func ReadElection(reader io.Reader) (*CompletedElection, error) {
       }
     }
   })
-
   return &CompletedElection{
-    Ballots:        ballots,
-    Choices:        choices,
-  }, nil
+    ElectionID: electionID,
+    Ballots:    ballots,
+    Choices:    choices,
+  }
 }
 
 // orderStrings returns two strings in lexicographical order when given two strings in any order.

@@ -206,10 +206,6 @@ func (t *Tally) RankedPairs() *RankedPairs {
   var sortedWinners = dagBuilder.tsort()
   var groupedWinners [][]string
   for ; len(sortedWinners) > 0; {
-    if len(sortedWinners) == 1 {
-      groupedWinners = append(groupedWinners, []string{sortedWinners[0]})
-      break
-    }
     var lastIndexWithSameRank = 0
     for innerIndex := 1; innerIndex < len(sortedWinners); innerIndex++ {
       pair := t.GetPair(sortedWinners[0], sortedWinners[innerIndex])

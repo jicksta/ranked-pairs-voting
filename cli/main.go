@@ -41,11 +41,11 @@ Number of cyclical locked pairs: %d`,
 The tally data contains information about the 1:1 "runoff" elections that Ranked Pairs simulates, consistent with the
 Condorcet Criterion. A table cell with the following text "A=3  B=2  (1)" would indicate that, in a runoff election
 between A and B, there are 3 votes for A over B, 2 votes for B over A, and 1 tie. A and B refer to the names listed in
-the column and row headers.`)
+the row and column headers, respectively (see labels).`)
 
 }
 
-func electionFromFile(filename string) *trp.CompletedElection {
+func electionFromFile(filename string) *trp.Election {
   f, err := os.Open(filename)
   if err != nil {
     panic(err)

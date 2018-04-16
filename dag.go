@@ -22,8 +22,8 @@ func newDAGBuilder() *dagBuilder {
   }
 }
 
-// addEdge idempotently creates an edge in the graph between two nodes (created just-in-time). If the new edge would
-// have introduced a cycle in the graph, it will not be added and an error will be returned instead.
+// addEdge idempotently creates an edge in the graph between two (JIT-created) nodes. If the new edge would have
+// introduced a cycle in the graph, it will not be added and an error will be returned instead.
 func (builder *dagBuilder) addEdge(from, to string) error {
   g, fromID, toID := builder.g, nodeIDFromName(from), nodeIDFromName(to)
   fromNode, toNode := simple.Node(fromID), simple.Node(toID)
@@ -60,7 +60,7 @@ func (builder *dagBuilder) hasEdge(from, to string) bool {
   return builder.g.HasEdgeFromTo(nodeIDFromName(from), nodeIDFromName(to))
 }
 
-// Sort topologically sorts the DAG into a single-dimensional slice of strings
+// tsort topologically sorts the DAG into a single-dimensional slice of strings
 func (builder *dagBuilder) tsort() []string {
   nodes, err := topo.Sort(builder.g)
   if err != nil {

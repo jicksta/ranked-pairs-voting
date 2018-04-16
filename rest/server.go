@@ -16,7 +16,7 @@ func main() {
   startServer(memoryStore)
 }
 
-func startServer(store trp.ElectionPersistence) {
+func startServer(store trp.ElectionStore) {
   r := gin.Default()
 
   r.GET("/elections", func(c *gin.Context) {
@@ -54,7 +54,7 @@ func startServer(store trp.ElectionPersistence) {
   r.Run() // listen and serve on 0.0.0.0:8080
 }
 
-func electionFromFile(filename string) *trp.CompletedElection {
+func electionFromFile(filename string) *trp.Election {
   f, err := os.Open(filename)
   if err != nil {
     panic(err)

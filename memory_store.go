@@ -2,7 +2,7 @@ package trp
 
 import "fmt"
 
-type MemoryStore map[string]*CompletedElection
+type MemoryStore map[string]*Election
 
 func NewMemoryStore() *MemoryStore {
   store := make(MemoryStore)
@@ -17,7 +17,7 @@ func (ms *MemoryStore) GetElections() []string {
   return result
 }
 
-func (ms *MemoryStore) GetElection(electionID string) (*CompletedElection, error) {
+func (ms *MemoryStore) GetElection(electionID string) (*Election, error) {
   var election, found = (*ms)[electionID]
   if !found {
     return nil, fmt.Errorf("no election with id %s", electionID)
@@ -25,7 +25,7 @@ func (ms *MemoryStore) GetElection(electionID string) (*CompletedElection, error
   return election, nil
 }
 
-func (ms *MemoryStore) CreateElection(electionID string, ballots []*Ballot) (*CompletedElection, error) {
+func (ms *MemoryStore) CreateElection(electionID string, ballots []*Ballot) (*Election, error) {
   election := NewElection(electionID, ballots)
   (*ms)[electionID] = election
   return election, nil
@@ -35,7 +35,7 @@ func (ms *MemoryStore) RemoveElection(electionID string) {
   delete(*ms, electionID)
 }
 
-func (ms *MemoryStore) SaveBallot(electionID string, newBallot *Ballot) (*CompletedElectionResults, error) {
+func (ms *MemoryStore) SaveBallot(electionID string, newBallot *Ballot) (*ElectionResults, error) {
   election, err := ms.GetElection(electionID)
   if err != nil {
     return nil, err
@@ -53,7 +53,7 @@ func (ms *MemoryStore) SaveBallot(electionID string, newBallot *Ballot) (*Comple
   return results, nil
 }
 
-func (ms *MemoryStore) RemoveBallot(electionID string, removedVoterID string) (*CompletedElectionResults, error) {
+func (ms *MemoryStore) RemoveBallot(electionID string, removedVoterID string) (*ElectionResults, error) {
   prevElection, _ := ms.GetElection(electionID)
 
   var ballots []*Ballot

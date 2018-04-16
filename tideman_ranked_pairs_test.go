@@ -7,14 +7,14 @@ import (
   "os"
 )
 
-var _ = Describe("CompletedElection", func() {
+var _ = Describe("Election", func() {
 
-  var e *CompletedElection
+  var e *Election
 
   Describe("Runoffs()", func() {
 
     BeforeEach(func() {
-      e = &CompletedElection{
+      e = &Election{
         Choices: []string{"A", "B", "C", "D"},
         Ballots: []*Ballot{
           {
@@ -30,7 +30,7 @@ var _ = Describe("CompletedElection", func() {
     })
 
     It("computes OneVersusOneVotes according to Condorcet rules", func() {
-      Expect(e.Ballots[0].Runoffs()).To(Equal([]RankablePair{
+      Expect(e.Ballots[0].Runoffs()).To(Equal([]*RankablePair{
         rankablePair("A", "B", false),
         rankablePair("A", "C", false),
         rankablePair("A", "D", false),
@@ -77,7 +77,7 @@ var _ = Describe("CompletedElection", func() {
       })
 
       BeforeEach(func() {
-        e = &CompletedElection{
+        e = &Election{
           Choices: []string{"A", "B", "C", "D"},
           Ballots: []*Ballot{
             {
@@ -261,14 +261,14 @@ var _ = Describe("Tally", func() {
   })
 })
 
-func rankablePair(winner, loser string, isTie bool) RankablePair {
+func rankablePair(winner, loser string, isTie bool) *RankablePair {
   var favorA, ties int64
   if isTie {
     ties = 1
   } else {
     favorA = 1
   }
-  return RankablePair{
+  return &RankablePair{
     A:      winner,
     B:      loser,
     FavorA: favorA,
@@ -277,7 +277,7 @@ func rankablePair(winner, loser string, isTie bool) RankablePair {
   }
 }
 
-func loadElectionFile(filename string) *CompletedElection {
+func loadElectionFile(filename string) *Election {
   f, _ := os.Open(filename)
   defer f.Close()
   election, _ := ReadElection(filename, f)

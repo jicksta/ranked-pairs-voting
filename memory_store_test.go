@@ -8,14 +8,15 @@ import (
 var _ = Describe("MemoryStore", func() {
 
   var store *MemoryStore
-  var persister *ElectionPersistence
   var noBallots []*Ballot
 
   BeforeEach(func() {
     store = NewMemoryStore()
-    cast := ElectionPersistence(store)
-    persister = &cast
     noBallots = []*Ballot{}
+  })
+
+  It("implements the ElectionStore interface", func() {
+    var _ = ElectionStore(store)
   })
 
   Describe("#GetElections", func() {
@@ -80,7 +81,7 @@ var _ = Describe("MemoryStore", func() {
 
     It("returns re-computed results when adding new ballots", func() {
       electionID := "election"
-      var results *CompletedElectionResults
+      var results *ElectionResults
 
       store.CreateElection(electionID, noBallots)
 
@@ -104,7 +105,7 @@ var _ = Describe("MemoryStore", func() {
       store.SaveBallot(electionID, removedBallot)
       store.SaveBallot(electionID, ballot(voter2, [][]string{{"A"}, {"B"}, {"C"}}))
 
-      election := func() *CompletedElection {
+      election := func() *Election {
         e, err := store.GetElection(electionID)
         Expect(err).To(Succeed())
         return e

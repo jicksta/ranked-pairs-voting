@@ -11,15 +11,15 @@ import (
   "github.com/olekukonko/tablewriter"
 )
 
-type ElectionPersistence interface {
+type ElectionStore interface {
   GetElections() []string
-  GetElection(string) (*CompletedElection, error)
+  GetElection(string) (*Election, error)
 
-  CreateElection(string, []*Ballot) (*CompletedElection, error)
+  CreateElection(string, []*Ballot) (*Election, error)
   RemoveElection(string)
 
-  SaveBallot(string, *Ballot) (*CompletedElectionResults, error)
-  RemoveBallot(string, string) (*CompletedElectionResults, error)
+  SaveBallot(string, *Ballot) (*ElectionResults, error)
+  RemoveBallot(string, string) (*ElectionResults, error)
 }
 
 // Ballot represents an individual voter's preferences. Priorities are represented as a two-dimensional
@@ -29,20 +29,20 @@ type Ballot struct {
   Priorities [][]string
 }
 
-// CompletedElection holds ballot data and a de-normalized sorted list of choices found in the ballots. To get the
+// Election holds ballot data and a de-normalized sorted list of choices found in the ballots. To get the
 // results of the election, call Results() on this object.
-type CompletedElection struct {
+type Election struct {
   ElectionID string
   Ballots    []*Ballot
   Choices    []string
 }
 
-// CompletedElectionResults has rich informational byproducts of the algorithm, as well as the final Winners sorted in
+// ElectionResults has rich informational byproducts of the algorithm, as well as the final Winners sorted in
 // descending order of priority.
-type CompletedElectionResults struct {
+type ElectionResults struct {
 
-  // Election is a reference to the CompletedElection that generated these results
-  Election *CompletedElection
+  // Election is a reference to the Election that generated these results
+  Election *Election
 
   // Tally contains rich data about all combinations of Condorcet runoff elections as RankablePairs
   Tally *Tally
@@ -61,7 +61,7 @@ type RankablePair struct {
 }
 
 // RankedPairs contains rich data about the final sorting process performed with data from the Tally. Note: The slice
-// of Winners in this object will be the same as the Winners list in the CompletedElectionResults struct.
+// of Winners in this object will be the same as the Winners list in the ElectionResults struct.
 type RankedPairs struct {
   // Winners contains the election choices sorted from greatest winners to worst losers. Ties are grouped in the second
   // dimension slice, sorted lexicographically.
@@ -95,25 +95,25 @@ type TallyMatrix struct {
   Tally *Tally
 }
 
-// Results returns rich information about the final CompletedElection results.
-func (e *CompletedElection) Results() *CompletedElectionResults {
+// Results returns rich information about the final Election results.
+func (e *Election) Results() *ElectionResults {
   tally := e.tally()
   rankedPairs := tally.RankedPairs()
 
-  return &CompletedElectionResults{
+  return &ElectionResults{
     Election:    e,
     Tally:       tally,
     RankedPairs: rankedPairs,
   }
 }
 
-// Winners is just a convenience method for accessing CompletedElectionResults.RankedPairs.Winners
-func (r *CompletedElectionResults) Winners() [][]string {
+// Winners is just a convenience method for accessing ElectionResults.RankedPairs.Winners
+func (r *ElectionResults) Winners() [][]string {
   return r.RankedPairs.Winners
 }
 
 // Tally counts how many times voters preferred choice A > B, B > A, and B = A
-func (e *CompletedElection) tally() *Tally {
+func (e *Election) tally() *Tally {
   t := newTally()
   for _, ballot := range e.Ballots {
     for _, ballotRankedPair := range ballot.Runoffs() {
@@ -131,14 +131,14 @@ func (e *CompletedElection) tally() *Tally {
 // Runoffs generates a slice of ranked pairs for an individual ballot that expresses the ballot's
 // preferences if 1:1 runoff elections were ran for all choices against each other. This is one
 // of the defining features of a voting method that satisfies the "Condorcet criterion".
-func (ballot *Ballot) Runoffs() []RankablePair {
-  var result []RankablePair
+func (ballot *Ballot) Runoffs() []*RankablePair {
+  var result []*RankablePair
   for indexOuter, choiceOuter := range ballot.Priorities {
 
     // First, add all ties to the slice we'll return at the end
     for tieOuterIndex := range choiceOuter {
       for tieInnerIndex := tieOuterIndex + 1; tieInnerIndex < len(choiceOuter); tieInnerIndex++ {
-        result = append(result, RankablePair{
+        result = append(result, &RankablePair{
           A:      choiceOuter[tieOuterIndex],
           B:      choiceOuter[tieInnerIndex],
           FavorA: 0,
@@ -155,7 +155,7 @@ func (ballot *Ballot) Runoffs() []RankablePair {
           // Ballot RankablePairs are always votes for A, or ties, but never a vote for B over A. They also include
           // combinations of A and B that would not be in the Tally because the Tally deterministically orders A and B
           // lexicographically such that A vs B and B vs A both share the same RankablePair in the Tally.
-          result = append(result, RankablePair{
+          result = append(result, &RankablePair{
             A:      eachWinningChoiceOfSamePriority,
             B:      eachLosingChoiceOfSamePriority,
             FavorA: 1,
@@ -258,7 +258,7 @@ func (t *Tally) lockedPairs() *[]RankablePair {
     result[i] = pair
   }
 
-  sort.SliceStable(result, func(i int, j int) bool {
+  sort.SliceStable(result, func(i, j int) bool {
     left, right := result[i], result[j]
     return left.VictoryMagnitude() >= right.VictoryMagnitude()
   })
@@ -402,7 +402,7 @@ func (rp *RankedPairs) PrintTable(writer io.Writer) {
   table.Render()
 }
 
-// ReadElection deserializes a CompletedElection from a Reader using the following format:
+// ReadElection deserializes a Election from a Reader using the following format:
 //
 //     <voterID> <choiceA> <choiceB> <choiceC>
 //
@@ -412,7 +412,7 @@ func (rp *RankedPairs) PrintTable(writer io.Writer) {
 //
 // In this example above, Finn and Jake are tied for 1st place, Bubblegum and Lemongrab
 // are tied for 2nd, and Marceline and IceKing are 3rd and 4th places, respectively.
-func ReadElection(electionID string, reader io.Reader) (*CompletedElection, error) {
+func ReadElection(electionID string, reader io.Reader) (*Election, error) {
   var ballots []*Ballot
   scanner := bufio.NewScanner(reader)
   whitespaceSeparator := regexp.MustCompile("\\s+")
@@ -434,7 +434,7 @@ func ReadElection(electionID string, reader io.Reader) (*CompletedElection, erro
   return NewElection(electionID, ballots), nil
 }
 
-func NewElection(electionID string, ballots []*Ballot) *CompletedElection {
+func NewElection(electionID string, ballots []*Ballot) *Election {
   choices := sortedUniques(func(q chan<- string) {
     for _, ballot := range ballots {
       for _, priorityChoices := range ballot.Priorities {
@@ -444,7 +444,7 @@ func NewElection(electionID string, ballots []*Ballot) *CompletedElection {
       }
     }
   })
-  return &CompletedElection{
+  return &Election{
     ElectionID: electionID,
     Ballots:    ballots,
     Choices:    choices,

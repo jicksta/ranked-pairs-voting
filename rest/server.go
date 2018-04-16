@@ -50,6 +50,7 @@ func startServer(store trp.ElectionPersistence) {
     }
   })
 
+  r.StaticFS("/webui", gin.Dir("./rest/webui", true))
   r.Run() // listen and serve on 0.0.0.0:8080
 }
 

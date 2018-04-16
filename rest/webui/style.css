@@ -1,0 +1,14 @@
+body {
+    background-color: black;
+    color: white;
+}
+
+main {
+    width: 400px;
+    margin: 0 auto;
+}
+
+ul {
+    padding-left: 5px;
+}
+

@@ -23,6 +23,17 @@ func startServer(store trp.ElectionStore) {
 		c.JSON(200, store.GetElections())
 	})
 
+	r.POST("/elections", func(c *gin.Context) {
+		if postBody, err := c.GetRawData(); err == nil {
+			deserialized := &trp.Election{}
+			json.Unmarshal(postBody, deserialized)
+			e, _ := store.CreateElection(deserialized.ElectionID, deserialized.Ballots)
+			c.JSON(201, e.Results())
+		} else {
+			c.JSON(422, gin.H{"error": err.Error()})
+		}
+	})
+
 	r.GET("/elections/:electionID", func(c *gin.Context) {
 		electionID := c.Param("electionID")
 		election, err := store.GetElection(electionID)
@@ -30,7 +41,8 @@ func startServer(store trp.ElectionStore) {
 			c.JSON(404, gin.H{"error": "Cannot find election with ID " + electionID})
 			return
 		}
-		c.JSON(200, election.Results())
+		results := election.Results()
+		c.JSON(200, results)
 	})
 
 	r.POST("/elections/:electionID/ballots", func(c *gin.Context) {
@@ -44,7 +56,7 @@ func startServer(store trp.ElectionStore) {
 
 		electionID := c.Param("electionID")
 		if results, err := store.SaveBallot(electionID, ballot); err == nil {
-			c.JSON(200, results)
+			c.JSON(201, results)
 		} else {
 			c.JSON(404, gin.H{"error": "Cannot find election with ID " + electionID})
 		}

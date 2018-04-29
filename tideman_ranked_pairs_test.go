@@ -240,6 +240,47 @@ var _ = Describe("Election", func() {
 
 			Expect(e.Results().Winners()).To(Equal([][]string{{"A", "B"}, {"C"}}))
 		})
+
+		It("includes all choices of the election as ordered winners (regression test)", func() {
+			ballots := []*Ballot{
+				{
+					VoterID:    "Jay",
+					Priorities: [][]string{{"DarkSun"}, {"Planescape"}, {"Dragonlance"}, {"Orborros"}, {"Eberron"}},
+				},
+				{
+					VoterID:    "Jack",
+					Priorities: [][]string{{"Orborros"}, {"Dragonlance"}, {"Eberron"}, {"Planescape"}, {"DarkSun"}},
+				},
+				{
+					VoterID:    "Cassandra",
+					Priorities: [][]string{{"DarkSun"}, {"Planescape"}, {"Dragonlance"}, {"Eberron"}, {"Orborros"}},
+				},
+				{
+					VoterID:    "Robin",
+					Priorities: [][]string{{"Dragonlance"}, {"Planescape"}, {"Eberron"}, {"DarkSun"}, {"Orborros"}},
+				},
+				{
+					VoterID:    "Sarah",
+					Priorities: [][]string{{"Dragonlance"}, {"Eberron"}, {"Planescape"}, {"Orborros"}, {"DarkSun"}},
+				},
+				{
+					VoterID:    "David",
+					Priorities: [][]string{{"Orborros"}, {"DarkSun"}, {"Eberron"}, {"Planescape"}, {"Dragonlance"}},
+				},
+			}
+			e = NewElection("e", ballots)
+			winners := e.Results().RankedPairs.Winners
+
+			flattenedWinners := sortedUniques(func(q chan<- string) {
+				for _, rank := range winners {
+					for _, str := range rank {
+						q <- str
+					}
+				}
+			})
+
+			Expect(flattenedWinners).To(Equal([]string{"DarkSun", "Dragonlance", "Eberron", "Orborros", "Planescape"}))
+		})
 	})
 
 })

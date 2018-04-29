@@ -193,6 +193,22 @@ func (t *Tally) RankedPairs() *RankedPairs {
 	}
 
 	var sortedWinners = dagBuilder.tsort()
+
+	// Any choices not in the DAG must be tied for last
+	var lastPlaceGroup []string
+	for _, choice := range t.knownChoices() {
+		var choiceInSortedWinners bool
+		for _, sortedWinner := range sortedWinners {
+			if sortedWinner == choice {
+				choiceInSortedWinners = true
+				break
+			}
+		}
+		if !choiceInSortedWinners {
+			lastPlaceGroup = append(lastPlaceGroup, choice)
+		}
+	}
+
 	var groupedWinners = make([][]string, 0, len(sortedWinners))
 	for len(sortedWinners) > 0 {
 		var lastIndexWithSameRank = 0
@@ -210,6 +226,11 @@ func (t *Tally) RankedPairs() *RankedPairs {
 		groupedWinners = append(groupedWinners, sameRankGroup)
 
 		sortedWinners = sortedWinners[1+lastIndexWithSameRank:]
+	}
+
+	if len(lastPlaceGroup) > 0 {
+		sort.Strings(lastPlaceGroup)
+		groupedWinners = append(groupedWinners, lastPlaceGroup)
 	}
 
 	return &RankedPairs{

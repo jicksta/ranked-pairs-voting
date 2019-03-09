@@ -28,12 +28,12 @@ func (builder *dagBuilder) addEdge(from, to string) error {
 	g, fromID, toID := builder.g, nodeIDFromName(from), nodeIDFromName(to)
 	fromNode, toNode := simple.Node(fromID), simple.Node(toID)
 
-	if !g.Has(fromID) {
+	if g.Node(fromID) == nil {
 		g.AddNode(fromNode)
 		(*builder.nodeNames)[fromID] = from
 	}
 
-	if !g.Has(toID) {
+	if g.Node(toID) == nil {
 		g.AddNode(toNode)
 		(*builder.nodeNames)[toID] = to
 	}
@@ -48,7 +48,7 @@ func (builder *dagBuilder) addEdge(from, to string) error {
 	}
 
 	if _, err := topo.Sort(g); err != nil {
-		g.RemoveEdge(newEdge)
+		g.RemoveEdge(fromID, toID)
 		return err
 	}
 
@@ -76,7 +76,7 @@ func (builder *dagBuilder) tsort() []string {
 
 // graphViz returns a DOT-format "encoding" of the DAG for visualizing with GraphViz
 func (builder *dagBuilder) graphViz() string {
-	out, _ := dot.Marshal(builder.g, "Election", "", "  ", false)
+	out, _ := dot.Marshal(builder.g, "Election", "", "  ")
 	return string(out)
 }
 

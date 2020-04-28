@@ -22,33 +22,35 @@ func newDAGBuilder() *dagBuilder {
 	}
 }
 
+func graphHasID(graph *simple.DirectedGraph, id int64) bool {
+	return graph.Node(id) != nil
+}
+
 // addEdge idempotently creates an edge in the graph between two (JIT-created) nodes. If the new edge would have
 // introduced a cycle in the graph, it will not be added and an error will be returned instead.
 func (builder *dagBuilder) addEdge(from, to string) error {
 	g, fromID, toID := builder.g, nodeIDFromName(from), nodeIDFromName(to)
 	fromNode, toNode := simple.Node(fromID), simple.Node(toID)
 
-	if !g.Has(fromID) {
+	if !graphHasID(g, fromID) {
 		g.AddNode(fromNode)
 		(*builder.nodeNames)[fromID] = from
 	}
 
-	if !g.Has(toID) {
+	if !graphHasID(g, toID) {
 		g.AddNode(toNode)
 		(*builder.nodeNames)[toID] = to
 	}
 
-	newEdge := simple.Edge{
-		F: fromNode,
-		T: toNode,
-	}
-
 	if !g.HasEdgeFromTo(fromID, toID) {
-		g.SetEdge(newEdge)
+		g.SetEdge(simple.Edge{
+			F: fromNode,
+			T: toNode,
+		})
 	}
 
 	if _, err := topo.Sort(g); err != nil {
-		g.RemoveEdge(newEdge)
+		g.RemoveEdge(fromID, toID)
 		return err
 	}
 
@@ -76,7 +78,7 @@ func (builder *dagBuilder) tsort() []string {
 
 // graphViz returns a DOT-format "encoding" of the DAG for visualizing with GraphViz
 func (builder *dagBuilder) graphViz() string {
-	out, _ := dot.Marshal(builder.g, "Election", "", "  ", false)
+	out, _ := dot.Marshal(builder.g, "Election", "", "  ")
 	return string(out)
 }
 

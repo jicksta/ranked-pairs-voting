@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	trp "github.com/jicksta/ranked-pairs-voting"
+	r "github.com/jicksta/ranked-pairs-voting/report"
 	"log"
 	"os"
 	"strings"
@@ -14,7 +15,10 @@ func main() {
 	electionFilename := filenameFromArgs(os.Args)
 	election := electionFromFile(electionFilename)
 	results := election.Results()
+
 	executionDuration := time.Now().Sub(startTime)
+
+	reporter := r.NewElectionReport(results)
 
 	fmt.Print("Results:\n\n")
 	for n, group := range results.Winners() {
@@ -34,10 +38,10 @@ Number of cyclical locked pairs: %d`,
 		len(results.RankedPairs.CyclicalLockedPairsIndices))
 
 	fmt.Print("\n\n\nRanked Pairs Data:\n\n")
-	results.RankedPairs.PrintTable(os.Stdout)
+	reporter.PrintRankedPairsTable(os.Stdout)
 
 	fmt.Print("\n\nTally Data:\n\n")
-	results.Tally.PrintTable(os.Stdout)
+	reporter.PrintTallyTable(os.Stdout)
 
 	fmt.Println(`
 The tally data contains information about the 1:1 "runoff" elections that Ranked Pairs simulates, consistent with the

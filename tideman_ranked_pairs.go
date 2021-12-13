@@ -4,7 +4,6 @@ package trp
 import (
 	"bufio"
 	"fmt"
-	"github.com/olekukonko/tablewriter"
 	"io"
 	"regexp"
 	"sort"
@@ -36,7 +35,7 @@ type ElectionResults struct {
 	// Tally contains rich data about all combinations of Condorcet runoff elections as RankablePairs
 	Tally *Tally
 
-	// RankablePairs contains rich data about the sorting process performed with data from the Tally.
+	// RankedPairs contains rich data about the sorting process performed with data from the Tally.
 	RankedPairs *RankedPairs
 }
 
@@ -56,8 +55,8 @@ type RankedPairs struct {
 	// dimension slice, sorted lexicographically.
 	Winners [][]string
 
-	// lockedPairs contains all RankablePairs from the Tally sorted by VictoryMagnitude. Note: The order of this may be
-	// very different from Winners, and this will any RankablePairs that were ignored in the final sorting process because
+	// LockedPairs contains all RankablePairs from the Tally sorted by VictoryMagnitude. Note: The order of this may be
+	// very different from Winners, and this include will any RankablePairs that were ignored in the final sorting process because
 	// they would have introduced a cycle in the Directed Acyclic Graph of winning pairs. See CyclicalLockedPairsIndices
 	// for the indices in this slice of RankablePairs that cause cycles, if you care about such things.
 	LockedPairs *[]RankablePair
@@ -166,7 +165,7 @@ func (pair *RankablePair) VictoryMagnitude() int64 {
 	return delta
 }
 
-// RankedPairs uses a graph algorithm (a continuously topologically sorted Directed Acyclic Graph) to order the "locked"
+// RankedPairs uses a graph algorithm (a continuously topologically-sorted Directed Acyclic Graph) to order the "locked"
 // ranked pairs from a Tally (which were sorted only by VictoryMagnitude) such that all preferences are taken into
 // consideration. If one of the victory-sorted locked ranked pairs would have created a cycle in the DAG, it is ignored
 // and returned in the final return value separately for potential visualization purposes. The DAG that this uses is
@@ -174,16 +173,16 @@ func (pair *RankablePair) VictoryMagnitude() int64 {
 func (t *Tally) RankedPairs() *RankedPairs {
 	lockedPairs := t.lockedPairs()
 
-	dagBuilder := newDAGBuilder()
+	dag := NewDAG()
 	var cycles []int
 
 	for i, pair := range *lockedPairs {
 		if pair.FavorA > pair.FavorB {
-			if err := dagBuilder.addEdge(pair.A, pair.B); err != nil {
+			if err := dag.AddEdge(pair.A, pair.B); err != nil {
 				cycles = append(cycles, i)
 			}
 		} else if pair.FavorB > pair.FavorA {
-			if err := dagBuilder.addEdge(pair.B, pair.A); err != nil {
+			if err := dag.AddEdge(pair.B, pair.A); err != nil {
 				cycles = append(cycles, i)
 			}
 		} else {
@@ -192,7 +191,7 @@ func (t *Tally) RankedPairs() *RankedPairs {
 		}
 	}
 
-	var sortedWinners = dagBuilder.tsort()
+	var sortedWinners = dag.TSort().IDs()
 
 	// Any choices not in the DAG must be tied for last
 	var lastPlaceGroup []string
@@ -338,76 +337,6 @@ func (t *Tally) Matrix() *TallyMatrix {
 	return &TallyMatrix{Headings: headings, RowsColumns: rowsColumns}
 }
 
-func (t *Tally) PrintTable(writer io.Writer) {
-	matrix := t.Matrix()
-	table := tablewriter.NewWriter(writer)
-
-	// Configure for Markdown table formatting
-	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-	table.SetCenterSeparator("|")
-
-	var headingsWithPrefixes = []string{"A"}
-	for _, header := range matrix.Headings {
-		headingsWithPrefixes = append(headingsWithPrefixes, "B="+header)
-	}
-	table.SetHeader(headingsWithPrefixes)
-
-	for i, rowChoice := range matrix.Headings {
-		rowPairs := matrix.RowsColumns[i]
-
-		var cells = []string{"A=" + strings.ToUpper(rowChoice)}
-		for j, pair := range rowPairs {
-			if pair == nil {
-				cells = append(cells, "")
-				continue
-			}
-			columnChoice := matrix.Headings[j]
-			var cellText string
-			if columnChoice == pair.A {
-				cellText = fmt.Sprintf("A=%d  B=%d  (%d)", pair.FavorA, pair.FavorB, pair.Ties)
-			} else {
-				cellText = fmt.Sprintf("A=%d  B=%d  (%d)", pair.FavorB, pair.FavorA, pair.Ties)
-			}
-			cells = append(cells, cellText)
-		}
-
-		table.Append(cells)
-	}
-
-	table.Render()
-}
-
-func (rp *RankedPairs) PrintTable(writer io.Writer) {
-	table := tablewriter.NewWriter(writer)
-	table.SetHeader([]string{"Rank", "A", "B", "# A", "# B", "# Ties", "Cyclical?", "Won by"})
-
-	// Configure for Markdown table formatting
-	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-	table.SetCenterSeparator("|")
-
-	for i, pair := range *rp.LockedPairs {
-		var isCyclical bool
-		for _, cyclicalIndex := range rp.CyclicalLockedPairsIndices {
-			if i == cyclicalIndex {
-				isCyclical = true
-				break
-			}
-		}
-		table.Append([]string{
-			fmt.Sprint(i + 1),
-			pair.A,
-			pair.B,
-			fmt.Sprint(pair.FavorA),
-			fmt.Sprint(pair.FavorB),
-			fmt.Sprint(pair.Ties),
-			fmt.Sprint(isCyclical),
-			fmt.Sprint(pair.VictoryMagnitude()),
-		})
-	}
-
-	table.Render()
-}
-
 // ReadElection deserializes a Election from a Reader using the following format:
 //
 //     <voterID> <choiceA> <choiceB> <choiceC>
@@ -418,6 +347,8 @@ func (rp *RankedPairs) PrintTable(writer io.Writer) {
 //
 // In this example above, Finn and Jake are tied for 1st place, Bubblegum and Lemongrab
 // are tied for 2nd, and Marceline and IceKing are 3rd and 4th places, respectively.
+//
+// The electionID param is only used for reporting purposes. It can be any string.
 func ReadElection(electionID string, reader io.Reader) (*Election, error) {
 	var ballots []*Ballot
 	scanner := bufio.NewScanner(reader)

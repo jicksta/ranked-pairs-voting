@@ -7,30 +7,20 @@ import (
 	"os"
 )
 
-var _ = Describe("Election", func() {
-
-	var e *Election
+var _ = Describe("Ballot", func() {
 
 	Describe("Runoffs()", func() {
 
-		BeforeEach(func() {
-			e = &Election{
-				Choices: []string{"A", "B", "C", "D"},
-				Ballots: []*Ballot{
-					{
-						VoterID: "ONE",
-						Priorities: [][]string{
-							{"A"},
-							{"B", "C"},
-							{"D"},
-						},
-					},
+		It("computes OneVersusOneVotes according to Condorcet rules", func() {
+			ballot := &Ballot{
+				VoterID: "voter",
+				Priorities: [][]string{
+					{"A"},
+					{"B", "C"},
+					{"D"},
 				},
 			}
-		})
-
-		It("computes OneVersusOneVotes according to Condorcet rules", func() {
-			Expect(e.Ballots[0].Runoffs()).To(Equal([]*RankablePair{
+			Expect(ballot.Runoffs()).To(Equal([]*RankablePair{
 				rankablePair("A", "B", false),
 				rankablePair("A", "C", false),
 				rankablePair("A", "D", false),
@@ -41,17 +31,30 @@ var _ = Describe("Election", func() {
 		})
 
 	})
+})
+
+var _ = Describe("Election", func() {
+
+	var e *Election
 
 	Describe("tested against a fixture", func() {
 
 		Describe("of a contrived election with a single dictator", func() {
 
-			Describe("#Tally1v1s()", func() {
+			BeforeEach(func() {
+				e = NewElectionBuilder().
+					Ballot("ONE", [][]string{{"A"}, {"B", "C"}, {"D"}}).
+					Vote("TWO", "A", "B", "C", "D").
+					Vote("THREE", "C", "B", "D", "A").
+					Election()
+			})
+
+			Describe("#Tally()", func() {
 
 				var tally *Tally
 
 				BeforeEach(func() {
-					tally = e.tally()
+					tally = e.Results().Tally
 				})
 
 				DescribeTable("tallies FavorA, FavorB, and Ties correctly",
@@ -74,40 +77,6 @@ var _ = Describe("Election", func() {
 					Entry("C vs D", "C", "D", 3, 0, 0),
 				)
 
-			})
-
-			BeforeEach(func() {
-				e = &Election{
-					Choices: []string{"A", "B", "C", "D"},
-					Ballots: []*Ballot{
-						{
-							VoterID: "ONE",
-							Priorities: [][]string{
-								{"A"},
-								{"B", "C"},
-								{"D"},
-							},
-						},
-						{
-							VoterID: "TWO",
-							Priorities: [][]string{
-								{"A"},
-								{"B"},
-								{"C"},
-								{"D"},
-							},
-						},
-						{
-							VoterID: "THREE",
-							Priorities: [][]string{
-								{"C"},
-								{"B"},
-								{"D"},
-								{"A"},
-							},
-						},
-					},
-				}
 			})
 		})
 
@@ -148,7 +117,7 @@ var _ = Describe("Election", func() {
 					var ranked *RankedPairs
 
 					BeforeEach(func() {
-						tally = e.tally()
+						tally = e.tallyBallots()
 						ranked = tally.RankedPairs()
 					})
 
@@ -189,7 +158,7 @@ var _ = Describe("Election", func() {
 					var tally *Tally
 
 					BeforeEach(func() {
-						tally = e.tally()
+						tally = e.tallyBallots()
 					})
 
 					DescribeTable("tallies FavorA, FavorB, and Ties correctly",
@@ -217,58 +186,58 @@ var _ = Describe("Election", func() {
 
 	})
 
-	Describe("sortedUniques()", func() {
-		It("returns the sorted unique strings sent to the chan", func() {
-			actual := sortedUniques(func(q chan<- string) {
-				q <- "Jay"
-				q <- "Phillips"
-				q <- "Jay"
-				q <- "foo"
-				q <- "bar"
-			})
-			Expect(actual).To(Equal([]string{"Jay", "Phillips", "bar", "foo"})) // go string sorting collates according to ASCII char values (capitals earlier)
-		})
-	})
-
 	Describe("Results()", func() {
 		It("groups ties", func() {
-			e = NewElection("e", []*Ballot{
-				{VoterID: "ONE", Priorities: [][]string{{"A"}, {"B"}, {"C"}}},
-				{VoterID: "TWO", Priorities: [][]string{{"B"}, {"A"}, {"C"}}},
-				{VoterID: "THREE", Priorities: [][]string{{"C"}, {"A", "B"}}},
-			})
+			// e = NewElection("e", []*Ballot{
+			// 	{VoterID: "ONE", Priorities: [][]string{{"A"}, {"B"}, {"C"}}},
+			// 	{VoterID: "TWO", Priorities: [][]string{{"B"}, {"A"}, {"C"}}},
+			// 	{VoterID: "THREE", Priorities: [][]string{{"C"}, {"A", "B"}}},
+			// })
+			e = NewElectionBuilder().
+				Vote("ONE", "A", "B", "C").
+				Vote("TWO", "B", "A", "C").
+				Ballot("THREE", [][]string{{"C"}, {"A", "B"}}).
+				Election()
 
 			Expect(e.Results().Winners()).To(Equal([][]string{{"A", "B"}, {"C"}}))
 		})
 
 		It("includes all choices of the election as ordered winners (regression test)", func() {
-			ballots := []*Ballot{
-				{
-					VoterID:    "Jay",
-					Priorities: [][]string{{"DarkSun"}, {"Planescape"}, {"Dragonlance"}, {"Orborros"}, {"Eberron"}},
-				},
-				{
-					VoterID:    "Jack",
-					Priorities: [][]string{{"Orborros"}, {"Dragonlance"}, {"Eberron"}, {"Planescape"}, {"DarkSun"}},
-				},
-				{
-					VoterID:    "Cassandra",
-					Priorities: [][]string{{"DarkSun"}, {"Planescape"}, {"Dragonlance"}, {"Eberron"}, {"Orborros"}},
-				},
-				{
-					VoterID:    "Robin",
-					Priorities: [][]string{{"Dragonlance"}, {"Planescape"}, {"Eberron"}, {"DarkSun"}, {"Orborros"}},
-				},
-				{
-					VoterID:    "Sarah",
-					Priorities: [][]string{{"Dragonlance"}, {"Eberron"}, {"Planescape"}, {"Orborros"}, {"DarkSun"}},
-				},
-				{
-					VoterID:    "David",
-					Priorities: [][]string{{"Orborros"}, {"DarkSun"}, {"Eberron"}, {"Planescape"}, {"Dragonlance"}},
-				},
-			}
-			e = NewElection("e", ballots)
+			e = NewElectionBuilder().
+				Vote("Jay", "DarkSun", "Planescape", "Dragonlance", "Orborros", "Eberron").
+				Vote("Jack", "Orborros", "Dragonlance", "Eberron", "Planescape", "DarkSun").
+				Vote("Cassandra", "DarkSun", "Planescape", "Dragonlance", "Eberron", "Orborros").
+				Vote("Robin", "Planescape", "Eberron", "DarkSun", "Orborros").
+				Vote("Sarah", "Eberron", "Planescape", "Orborros", "DarkSun").
+				Vote("David", "DarkSun", "Eberron", "Planescape", "Dragonlance").
+				Election()
+			// ballots := []*Ballot{
+			// 	{
+			// 		VoterID:    "Jay",
+			// 		Priorities: [][]string{{"DarkSun"}, {"Planescape"}, {"Dragonlance"}, {"Orborros"}, {"Eberron"}},
+			// 	},
+			// 	{
+			// 		VoterID:    "Jack",
+			// 		Priorities: [][]string{{"Orborros"}, {"Dragonlance"}, {"Eberron"}, {"Planescape"}, {"DarkSun"}},
+			// 	},
+			// 	{
+			// 		VoterID:    "Cassandra",
+			// 		Priorities: [][]string{{"DarkSun"}, {"Planescape"}, {"Dragonlance"}, {"Eberron"}, {"Orborros"}},
+			// 	},
+			// 	{
+			// 		VoterID:    "Robin",
+			// 		Priorities: [][]string{{"Dragonlance"}, {"Planescape"}, {"Eberron"}, {"DarkSun"}, {"Orborros"}},
+			// 	},
+			// 	{
+			// 		VoterID:    "Sarah",
+			// 		Priorities: [][]string{{"Dragonlance"}, {"Eberron"}, {"Planescape"}, {"Orborros"}, {"DarkSun"}},
+			// 	},
+			// 	{
+			// 		VoterID:    "David",
+			// 		Priorities: [][]string{{"Orborros"}, {"DarkSun"}, {"Eberron"}, {"Planescape"}, {"Dragonlance"}},
+			// 	},
+			// }
+			// e = NewElection("e", ballots)
 			winners := e.Results().RankedPairs.Winners
 
 			flattenedWinners := sortedUniques(func(q chan<- string) {
@@ -285,19 +254,16 @@ var _ = Describe("Election", func() {
 
 })
 
-var _ = Describe("Tally", func() {
-	Describe("#GetPair", func() {
-		It("guarantees a unique RankablePair for two candidates, irrespective of order passed in", func() {
-			tally := newTally()
-			ba := tally.GetPair("B", "A")
-			ab := tally.GetPair("A", "B")
-			abAgain := tally.GetPair("A", "B")
-
-			Expect(ab).To(BeIdenticalTo(ba))
-			Expect(ab).To(BeIdenticalTo(abAgain))
-			Expect(ab.A).To(Equal("A"))
-			Expect(ab.B).To(Equal("B"))
+var _ = Describe("sortedUniques()", func() {
+	It("returns the sorted unique strings sent to the chan", func() {
+		actual := sortedUniques(func(q chan<- string) {
+			q <- "Jay"
+			q <- "Phillips"
+			q <- "Jay"
+			q <- "foo"
+			q <- "bar"
 		})
+		Expect(actual).To(Equal([]string{"Jay", "Phillips", "bar", "foo"})) // go string sorting collates according to ASCII char values (capitals earlier)
 	})
 })
 

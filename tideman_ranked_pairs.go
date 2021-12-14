@@ -85,7 +85,7 @@ type TallyMatrix struct {
 
 // Results returns rich information about the final Election results.
 func (e *Election) Results() *ElectionResults {
-	tally := e.tally()
+	tally := e.tallyBallots()
 	rankedPairs := tally.RankedPairs()
 
 	return &ElectionResults{
@@ -100,8 +100,8 @@ func (r *ElectionResults) Winners() [][]string {
 	return r.RankedPairs.Winners
 }
 
-// Tally counts how many times voters preferred choice A > B, B > A, and B = A
-func (e *Election) tally() *Tally {
+// tallyBallots counts how many times voters preferred choice A > B, B > A, and B = A
+func (e *Election) tallyBallots() *Tally {
 	t := newTally()
 	for _, ballot := range e.Ballots {
 		for _, ballotRankedPair := range ballot.Runoffs() {

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <title>Tideman Ranked Pairs Demo</title>
+    <meta charset="utf-8"/>
+    <script src="./exporter.js" type="text/javascript" charset="utf-8"></script>
+</head>
+<body>
+
+<h1>Tideman Ranked Pairs Algorithm</h1>
+
+  <p>
+      Open the JavaScript console. A simple global <kbd>window.TRP</kbd> function is provided that
+      takes a JavaScript object whose keys are voter IDs with vaulues of two-dimensional arrays.
+  </p>
+
+  <p>
+    Example:
+
+    <pre>TRP({
+  "alice": [["A"], ["B"], ["C"]],
+  "bob":   [["B"], ["A"], ["C"]],
+  "carol": [["C"], ["A", "B"]]
+})</pre>
+  </p>
+
+  <p>
+      Returns the following:
+      <pre>[["A","B"],["C"]]</pre>
+      Given the votes, there are two first-place winners (A and B) and one last-place "winner" (C).
+  </p>
+</body>
+</html>

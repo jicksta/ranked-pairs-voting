@@ -3,6 +3,8 @@ package test
 import (
 	trp "github.com/jicksta/ranked-pairs-voting"
 	trpi "github.com/jicksta/ranked-pairs-voting/internal"
+	trpsys "github.com/jicksta/ranked-pairs-voting/sys"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -260,6 +262,6 @@ func loadElectionFile(filename string) *trp.Election {
 		panic(openErr)
 	}
 	defer f.Close()
-	election, _ := trp.ReadElection(filename, f)
+	election, _ := trpsys.ReadElection(filename, f)
 	return election
 }

@@ -1,14 +1,13 @@
-package main
+package sys
 
 import (
   "bufio"
+  . "github.com/jicksta/ranked-pairs-voting"
   "io"
   "log"
   "os"
   "regexp"
   "strings"
-  . "github.com/jicksta/ranked-pairs-voting"
-
 )
 
 // ReadElection deserializes a Election from a Reader using the following format:
@@ -45,7 +44,7 @@ func ReadElection(electionID string, reader io.Reader) (*Election, error) {
   return NewElection(electionID, ballots), nil
 }
 
-func electionFromFile(filename string) *Election {
+func ElectionFromFile(filename string) *Election {
   f, err := os.Open(filename)
   if err != nil {
     log.Fatal("Error: Could not open file at " + filename)

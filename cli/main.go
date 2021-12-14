@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"log"
+  "github.com/jicksta/ranked-pairs-voting/sys"
+  "log"
 	"os"
 	"strings"
 	"time"
@@ -11,12 +12,12 @@ import (
 func main() {
 	startTime := time.Now()
 	electionFilename := filenameFromArgs(os.Args)
-	election := electionFromFile(electionFilename)
+	election := sys.ElectionFromFile(electionFilename)
 	results := election.Results()
 
 	executionDuration := time.Now().Sub(startTime)
 
-	reporter := NewElectionReport(results)
+	reporter := sys.NewElectionReport(results)
 
 	fmt.Print("Results:\n\n")
 	for n, group := range results.Winners() {
@@ -26,6 +27,8 @@ func main() {
 	fmt.Printf(`
 Number of choices: %d
 Number of votes:   %d
+
+===============================================================================
 
 Algorithm: Tideman Ranked Pairs (TRP)
 Time to calculate: %s

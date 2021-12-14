@@ -1,25 +1,25 @@
 package main
 
 import (
-  trp "github.com/jicksta/ranked-pairs-voting"
-  "github.com/gopherjs/gopherjs/js"
-  // "github.com/gopherjs/jsbuiltin"
+	"github.com/gopherjs/gopherjs/js"
+	trp "github.com/jicksta/ranked-pairs-voting"
+	// "github.com/gopherjs/jsbuiltin"
 )
 
 type Votes map[string][][]string
 type Winners [][]string
 
 func main() {
-  js.Global.Set("TRP", TRP)
+	js.Global.Set("TRP", TRP)
 }
 
 func TRP(votes Votes) Winners {
-  var ballots = make([]*trp.Ballot, 0, len(votes))
-  for voterID, priorities := range votes {
-    ballots = append(ballots, &trp.Ballot{VoterID: voterID, Priorities: priorities})
-  }
-  election := trp.NewElection("Election", ballots)
-  return election.Results().Winners()
+	var ballots = make([]*trp.Ballot, 0, len(votes))
+	for voterID, priorities := range votes {
+		ballots = append(ballots, &trp.Ballot{VoterID: voterID, Priorities: priorities})
+	}
+	election := trp.NewElection("Election", ballots)
+	return election.Results().Winners()
 }
 
 /*

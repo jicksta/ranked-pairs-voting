@@ -1,13 +1,13 @@
 package sys
 
 import (
-  "bufio"
-  . "github.com/jicksta/ranked-pairs-voting"
-  "io"
-  "log"
-  "os"
-  "regexp"
-  "strings"
+	"bufio"
+	. "github.com/jicksta/ranked-pairs-voting"
+	"io"
+	"log"
+	"os"
+	"regexp"
+	"strings"
 )
 
 // ReadElection deserializes a Election from a Reader using the following format:
@@ -23,37 +23,37 @@ import (
 //
 // The electionID param is only used for reporting purposes. It can be any string.
 func ReadElection(electionID string, reader io.Reader) (*Election, error) {
-  var ballots []*Ballot
-  scanner := bufio.NewScanner(reader)
-  whitespaceSeparator := regexp.MustCompile("\\s+")
-  for scanner.Scan() {
-    nextLine := scanner.Text()
-    nonWhitespaceTokens := whitespaceSeparator.Split(nextLine, -1)
-    voterID := nonWhitespaceTokens[0]
-    var prioritizedChoices [][]string
-    for _, token := range nonWhitespaceTokens[1:] {
-      potentialTies := strings.Split(token, "=")
-      prioritizedChoices = append(prioritizedChoices, potentialTies)
-    }
-    ballots = append(ballots, &Ballot{
-      VoterID:    voterID,
-      Priorities: prioritizedChoices,
-    })
-  }
+	var ballots []*Ballot
+	scanner := bufio.NewScanner(reader)
+	whitespaceSeparator := regexp.MustCompile("\\s+")
+	for scanner.Scan() {
+		nextLine := scanner.Text()
+		nonWhitespaceTokens := whitespaceSeparator.Split(nextLine, -1)
+		voterID := nonWhitespaceTokens[0]
+		var prioritizedChoices [][]string
+		for _, token := range nonWhitespaceTokens[1:] {
+			potentialTies := strings.Split(token, "=")
+			prioritizedChoices = append(prioritizedChoices, potentialTies)
+		}
+		ballots = append(ballots, &Ballot{
+			VoterID:    voterID,
+			Priorities: prioritizedChoices,
+		})
+	}
 
-  return NewElection(electionID, ballots), nil
+	return NewElection(electionID, ballots), nil
 }
 
 func ElectionFromFile(filename string) *Election {
-  f, err := os.Open(filename)
-  if err != nil {
-    log.Fatal("Error: Could not open file at " + filename)
-  }
-  defer f.Close()
-  if election, err := ReadElection(filename, f); err == nil {
-    return election
-  } else {
-    log.Fatal("Error: Unable to process " + filename)
-    return nil
-  }
+	f, err := os.Open(filename)
+	if err != nil {
+		log.Fatal("Error: Could not open file at " + filename)
+	}
+	defer f.Close()
+	if election, err := ReadElection(filename, f); err == nil {
+		return election
+	} else {
+		log.Fatal("Error: Unable to process " + filename)
+		return nil
+	}
 }

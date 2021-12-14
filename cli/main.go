@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-  "github.com/jicksta/ranked-pairs-voting/sys"
-  "log"
+	"github.com/jicksta/ranked-pairs-voting/sys"
+	"log"
 	"os"
 	"strings"
 	"time"

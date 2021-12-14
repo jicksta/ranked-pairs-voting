@@ -6,23 +6,23 @@ import "sort"
 // This is just useful for encapsulating complex traversal logic cleanly in an inline func literal, exposing easy set
 // semantics, and auto-sorting at the end.
 func SortedUniques(chanReceiver func(chan<- string)) []string {
-  Q := make(chan string)
-  go func() {
-    chanReceiver(Q)
-    close(Q)
-  }()
+	Q := make(chan string)
+	go func() {
+		chanReceiver(Q)
+		close(Q)
+	}()
 
-  set := make(map[string]bool)
-  for str := range Q {
-    set[str] = true
-  }
+	set := make(map[string]bool)
+	for str := range Q {
+		set[str] = true
+	}
 
-  var strs []string
-  for key := range set {
-    strs = append(strs, key)
-  }
+	var strs []string
+	for key := range set {
+		strs = append(strs, key)
+	}
 
-  sort.Strings(strs)
+	sort.Strings(strs)
 
-  return strs
+	return strs
 }

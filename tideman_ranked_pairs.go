@@ -333,7 +333,6 @@ func (t *Tally) Matrix() *TallyMatrix {
 	return &TallyMatrix{Headings: headings, RowsColumns: rowsColumns}
 }
 
-
 func NewElection(electionID string, ballots []*Ballot) *Election {
 	choices := SortedUniques(func(q chan<- string) {
 		for _, ballot := range ballots {

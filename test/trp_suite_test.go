@@ -1,4 +1,4 @@
-package trp
+package test
 
 import (
 	"github.com/onsi/ginkgo"

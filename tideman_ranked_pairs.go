@@ -1,13 +1,9 @@
-// Working implementation of the Tideman Ranked Pairs (TRP) Condorcet voting method
+// Package trp provides a working implementation of the Tideman Ranked Pairs (TRP) Condorcet voting method with no external dependencies
 package trp
 
 import (
-	"bufio"
-	"fmt"
-	"io"
-	"regexp"
+	. "github.com/jicksta/ranked-pairs-voting/internal"
 	"sort"
-	"strings"
 )
 
 // Ballot represents an individual voter's preferences. Priorities are represented as a two-dimensional
@@ -85,7 +81,7 @@ type TallyMatrix struct {
 
 // Results returns rich information about the final Election results.
 func (e *Election) Results() *ElectionResults {
-	tally := e.tallyBallots()
+	tally := e.TallyBallots()
 	rankedPairs := tally.RankedPairs()
 
 	return &ElectionResults{
@@ -100,8 +96,8 @@ func (r *ElectionResults) Winners() [][]string {
 	return r.RankedPairs.Winners
 }
 
-// tallyBallots counts how many times voters preferred choice A > B, B > A, and B = A
-func (e *Election) tallyBallots() *Tally {
+// TallyBallots counts how many times voters preferred choice A > B, B > A, and B = A
+func (e *Election) TallyBallots() *Tally {
 	t := newTally()
 	for _, ballot := range e.Ballots {
 		for _, ballotRankedPair := range ballot.Runoffs() {
@@ -298,7 +294,7 @@ func (t *Tally) incrementWinner(winner, loser string) {
 	} else if pair.B == winner {
 		pair.FavorB++
 	} else {
-		panic(fmt.Errorf("invalid winner string given %s for pair with A=%s and B=%s", winner, pair.A, pair.B))
+		panic("invalid winner string given " + winner + " for pair with A=" + pair.A + " and B=" + pair.B)
 	}
 }
 
@@ -308,7 +304,7 @@ func (t *Tally) incrementTies(first, second string) {
 }
 
 func (t *Tally) knownChoices() []string {
-	return sortedUniques(func(q chan<- string) {
+	return SortedUniques(func(q chan<- string) {
 		for outerKey := range *t.pairs {
 			q <- outerKey
 			for innerKey := range (*t.pairs)[outerKey] {
@@ -337,42 +333,9 @@ func (t *Tally) Matrix() *TallyMatrix {
 	return &TallyMatrix{Headings: headings, RowsColumns: rowsColumns}
 }
 
-// ReadElection deserializes a Election from a Reader using the following format:
-//
-//     <voterID> <choiceA> <choiceB> <choiceC>
-//
-// Ties can be expressed as <choiceA>=<choiceB>. For example:
-//
-//     VOTER_JAY  Finn=Jake  Bubblegum=Lemongrab  Marceline  IceKing
-//
-// In this example above, Finn and Jake are tied for 1st place, Bubblegum and Lemongrab
-// are tied for 2nd, and Marceline and IceKing are 3rd and 4th places, respectively.
-//
-// The electionID param is only used for reporting purposes. It can be any string.
-func ReadElection(electionID string, reader io.Reader) (*Election, error) {
-	var ballots []*Ballot
-	scanner := bufio.NewScanner(reader)
-	whitespaceSeparator := regexp.MustCompile("\\s+")
-	for scanner.Scan() {
-		nextLine := scanner.Text()
-		nonWhitespaceTokens := whitespaceSeparator.Split(nextLine, -1)
-		voterID := nonWhitespaceTokens[0]
-		var prioritizedChoices [][]string
-		for _, token := range nonWhitespaceTokens[1:] {
-			potentialTies := strings.Split(token, "=")
-			prioritizedChoices = append(prioritizedChoices, potentialTies)
-		}
-		ballots = append(ballots, &Ballot{
-			VoterID:    voterID,
-			Priorities: prioritizedChoices,
-		})
-	}
-
-	return NewElection(electionID, ballots), nil
-}
 
 func NewElection(electionID string, ballots []*Ballot) *Election {
-	choices := sortedUniques(func(q chan<- string) {
+	choices := SortedUniques(func(q chan<- string) {
 		for _, ballot := range ballots {
 			for _, priorityChoices := range ballot.Priorities {
 				for _, choice := range priorityChoices {
@@ -394,27 +357,4 @@ func orderStrings(first, second string) (string, string) {
 		return first, second
 	}
 	return second, first
-}
-
-// sortedUniques invokes chanReceiver with a `chan string`. It returns a sorted slice of unique strings sent to the chan
-func sortedUniques(chanReceiver func(chan<- string)) []string {
-	Q := make(chan string)
-	go func() {
-		chanReceiver(Q)
-		close(Q)
-	}()
-
-	set := make(map[string]bool)
-	for str := range Q {
-		set[str] = true
-	}
-
-	var strs []string
-	for key := range set {
-		strs = append(strs, key)
-	}
-
-	sort.Strings(strs)
-
-	return strs
 }

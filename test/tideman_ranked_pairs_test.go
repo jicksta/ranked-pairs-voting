@@ -1,6 +1,8 @@
-package trp
+package test
 
 import (
+	trp "github.com/jicksta/ranked-pairs-voting"
+	trpi "github.com/jicksta/ranked-pairs-voting/internal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -12,7 +14,7 @@ var _ = Describe("Ballot", func() {
 	Describe("Runoffs()", func() {
 
 		It("computes OneVersusOneVotes according to Condorcet rules", func() {
-			ballot := &Ballot{
+			ballot := &trp.Ballot{
 				VoterID: "voter",
 				Priorities: [][]string{
 					{"A"},
@@ -20,7 +22,7 @@ var _ = Describe("Ballot", func() {
 					{"D"},
 				},
 			}
-			Expect(ballot.Runoffs()).To(Equal([]*RankablePair{
+			Expect(ballot.Runoffs()).To(Equal([]*trp.RankablePair{
 				rankablePair("A", "B", false),
 				rankablePair("A", "C", false),
 				rankablePair("A", "D", false),
@@ -35,14 +37,14 @@ var _ = Describe("Ballot", func() {
 
 var _ = Describe("Election", func() {
 
-	var e *Election
+	var e *trp.Election
 
 	Describe("tested against a fixture", func() {
 
 		Describe("of a contrived election with a single dictator", func() {
 
 			BeforeEach(func() {
-				e = NewElectionBuilder().
+				e = trp.NewElectionBuilder().
 					Ballot("ONE", [][]string{{"A"}, {"B", "C"}, {"D"}}).
 					Vote("TWO", "A", "B", "C", "D").
 					Vote("THREE", "C", "B", "D", "A").
@@ -51,7 +53,7 @@ var _ = Describe("Election", func() {
 
 			Describe("#Tally()", func() {
 
-				var tally *Tally
+				var tally *trp.Tally
 
 				BeforeEach(func() {
 					tally = e.Results().Tally
@@ -85,7 +87,7 @@ var _ = Describe("Election", func() {
 			Context("scenario1", func() {
 
 				BeforeEach(func() {
-					e = loadElectionFile("fixtures/condorcet.ca/scenario1.txt")
+					e = loadElectionFile("../fixtures/condorcet.ca/scenario1.txt")
 				})
 
 				It("has all the 5 expected choices", func() {
@@ -104,7 +106,7 @@ var _ = Describe("Election", func() {
 			Context("scenario5.txt", func() {
 
 				BeforeEach(func() {
-					e = loadElectionFile("fixtures/condorcet.ca/scenario5.txt")
+					e = loadElectionFile("../fixtures/condorcet.ca/scenario5.txt")
 				})
 
 				It("has 2000 votes", func() {
@@ -113,16 +115,16 @@ var _ = Describe("Election", func() {
 
 				Describe("#RankedPairs", func() {
 
-					var tally *Tally
-					var ranked *RankedPairs
+					var tally *trp.Tally
+					var ranked *trp.RankedPairs
 
 					BeforeEach(func() {
-						tally = e.tallyBallots()
+						tally = e.TallyBallots()
 						ranked = tally.RankedPairs()
 					})
 
 					It("has the expected highest LockedPair by highest magnitude", func() {
-						Expect((*ranked.LockedPairs)[0]).To(Equal(RankablePair{
+						Expect((*ranked.LockedPairs)[0]).To(Equal(trp.RankablePair{
 							A:      "FUDD_ELMIRA",
 							B:      "RUHNER_ROD",
 							FavorA: 1142,
@@ -132,7 +134,7 @@ var _ = Describe("Election", func() {
 					})
 
 					It("calculates the expected winners", func() {
-						var droppedPairs []RankablePair
+						var droppedPairs []trp.RankablePair
 
 						for _, cyclicalIndex := range ranked.CyclicalLockedPairsIndices {
 							droppedPairs = append(droppedPairs, (*ranked.LockedPairs)[cyclicalIndex])
@@ -143,7 +145,7 @@ var _ = Describe("Election", func() {
 							{"RUHNER_ROD"}, {"DUCH_DAWN"}, {"BUNNY_B"}, {"MOWZ_MINERVA"}, {"CAT_SYLVESTER_T"},
 						}))
 
-						Expect(droppedPairs).To(Equal([]RankablePair{
+						Expect(droppedPairs).To(Equal([]trp.RankablePair{
 							{A: "DUCH_DAWN", B: "MOWZ_MINERVA", FavorA: 1087, FavorB: 1102, Ties: 189},
 							{A: "MOWZ_MINERVA", B: "RUHNER_ROD", FavorA: 1102, FavorB: 1099, Ties: 201},
 							{A: "BUNNY_B", B: "MOWZ_MICHAEL", FavorA: 1095, FavorB: 1095, Ties: 190},
@@ -155,10 +157,10 @@ var _ = Describe("Election", func() {
 
 				Describe("#Tally()", func() {
 
-					var tally *Tally
+					var tally *trp.Tally
 
 					BeforeEach(func() {
-						tally = e.tallyBallots()
+						tally = e.TallyBallots()
 					})
 
 					DescribeTable("tallies FavorA, FavorB, and Ties correctly",
@@ -188,12 +190,7 @@ var _ = Describe("Election", func() {
 
 	Describe("Results()", func() {
 		It("groups ties", func() {
-			// e = NewElection("e", []*Ballot{
-			// 	{VoterID: "ONE", Priorities: [][]string{{"A"}, {"B"}, {"C"}}},
-			// 	{VoterID: "TWO", Priorities: [][]string{{"B"}, {"A"}, {"C"}}},
-			// 	{VoterID: "THREE", Priorities: [][]string{{"C"}, {"A", "B"}}},
-			// })
-			e = NewElectionBuilder().
+			e = trp.NewElectionBuilder().
 				Vote("ONE", "A", "B", "C").
 				Vote("TWO", "B", "A", "C").
 				Ballot("THREE", [][]string{{"C"}, {"A", "B"}}).
@@ -203,7 +200,7 @@ var _ = Describe("Election", func() {
 		})
 
 		It("includes all choices of the election as ordered winners (regression test)", func() {
-			e = NewElectionBuilder().
+			e = trp.NewElectionBuilder().
 				Vote("Jay", "DarkSun", "Planescape", "Dragonlance", "Orborros", "Eberron").
 				Vote("Jack", "Orborros", "Dragonlance", "Eberron", "Planescape", "DarkSun").
 				Vote("Cassandra", "DarkSun", "Planescape", "Dragonlance", "Eberron", "Orborros").
@@ -211,36 +208,10 @@ var _ = Describe("Election", func() {
 				Vote("Sarah", "Eberron", "Planescape", "Orborros", "DarkSun").
 				Vote("David", "DarkSun", "Eberron", "Planescape", "Dragonlance").
 				Election()
-			// ballots := []*Ballot{
-			// 	{
-			// 		VoterID:    "Jay",
-			// 		Priorities: [][]string{{"DarkSun"}, {"Planescape"}, {"Dragonlance"}, {"Orborros"}, {"Eberron"}},
-			// 	},
-			// 	{
-			// 		VoterID:    "Jack",
-			// 		Priorities: [][]string{{"Orborros"}, {"Dragonlance"}, {"Eberron"}, {"Planescape"}, {"DarkSun"}},
-			// 	},
-			// 	{
-			// 		VoterID:    "Cassandra",
-			// 		Priorities: [][]string{{"DarkSun"}, {"Planescape"}, {"Dragonlance"}, {"Eberron"}, {"Orborros"}},
-			// 	},
-			// 	{
-			// 		VoterID:    "Robin",
-			// 		Priorities: [][]string{{"Dragonlance"}, {"Planescape"}, {"Eberron"}, {"DarkSun"}, {"Orborros"}},
-			// 	},
-			// 	{
-			// 		VoterID:    "Sarah",
-			// 		Priorities: [][]string{{"Dragonlance"}, {"Eberron"}, {"Planescape"}, {"Orborros"}, {"DarkSun"}},
-			// 	},
-			// 	{
-			// 		VoterID:    "David",
-			// 		Priorities: [][]string{{"Orborros"}, {"DarkSun"}, {"Eberron"}, {"Planescape"}, {"Dragonlance"}},
-			// 	},
-			// }
-			// e = NewElection("e", ballots)
+
 			winners := e.Results().RankedPairs.Winners
 
-			flattenedWinners := sortedUniques(func(q chan<- string) {
+			flattenedWinners := trpi.SortedUniques(func(q chan<- string) {
 				for _, rank := range winners {
 					for _, str := range rank {
 						q <- str
@@ -256,7 +227,7 @@ var _ = Describe("Election", func() {
 
 var _ = Describe("sortedUniques()", func() {
 	It("returns the sorted unique strings sent to the chan", func() {
-		actual := sortedUniques(func(q chan<- string) {
+		actual := trpi.SortedUniques(func(q chan<- string) {
 			q <- "Jay"
 			q <- "Phillips"
 			q <- "Jay"
@@ -267,14 +238,14 @@ var _ = Describe("sortedUniques()", func() {
 	})
 })
 
-func rankablePair(winner, loser string, isTie bool) *RankablePair {
+func rankablePair(winner, loser string, isTie bool) *trp.RankablePair {
 	var favorA, ties int64
 	if isTie {
 		ties = 1
 	} else {
 		favorA = 1
 	}
-	return &RankablePair{
+	return &trp.RankablePair{
 		A:      winner,
 		B:      loser,
 		FavorA: favorA,
@@ -283,9 +254,12 @@ func rankablePair(winner, loser string, isTie bool) *RankablePair {
 	}
 }
 
-func loadElectionFile(filename string) *Election {
-	f, _ := os.Open(filename)
+func loadElectionFile(filename string) *trp.Election {
+	f, openErr := os.Open(filename)
+	if openErr != nil {
+		panic(openErr)
+	}
 	defer f.Close()
-	election, _ := ReadElection(filename, f)
+	election, _ := trp.ReadElection(filename, f)
 	return election
 }

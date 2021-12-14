@@ -1,16 +1,17 @@
-package trp
+package test
 
 import (
+	"github.com/jicksta/ranked-pairs-voting"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("DAG", func() {
 
-	var dag *DAG
+	var dag *trp.DAG
 
 	BeforeEach(func() {
-		dag = NewDAG()
+		dag = trp.NewDAG()
 	})
 
 	Describe("#HasEdgeFromTo", func() {

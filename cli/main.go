@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	trp "github.com/jicksta/ranked-pairs-voting"
-	r "github.com/jicksta/ranked-pairs-voting/report"
 	"log"
 	"os"
 	"strings"
@@ -18,7 +16,7 @@ func main() {
 
 	executionDuration := time.Now().Sub(startTime)
 
-	reporter := r.NewElectionReport(results)
+	reporter := NewElectionReport(results)
 
 	fmt.Print("Results:\n\n")
 	for n, group := range results.Winners() {
@@ -61,18 +59,4 @@ func filenameFromArgs(args []string) string {
 		log.Fatal("Too many params given to the CLI")
 	}
 	return args[1]
-}
-
-func electionFromFile(filename string) *trp.Election {
-	f, err := os.Open(filename)
-	if err != nil {
-		log.Fatal("Error: Could not open file at " + filename)
-	}
-	defer f.Close()
-	if election, err := trp.ReadElection(filename, f); err == nil {
-		return election
-	} else {
-		log.Fatal("Error: Unable to process " + filename)
-		return nil
-	}
 }

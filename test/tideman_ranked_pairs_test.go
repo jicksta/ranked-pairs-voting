@@ -15,7 +15,7 @@ var _ = Describe("Ballot", func() {
 
 	Describe("Runoffs()", func() {
 
-		It("computes OneVersusOneVotes according to Condorcet rules", func() {
+		It("computes 1v1 runoff elections according to Condorcet rules", func() {
 			ballot := &trp.Ballot{
 				VoterID: "voter",
 				Priorities: [][]string{
@@ -89,7 +89,7 @@ var _ = Describe("Election", func() {
 			Context("scenario1", func() {
 
 				BeforeEach(func() {
-					e = loadElectionFile("../fixtures/condorcet.ca/scenario1.txt")
+					e = loadElectionFile("fixtures/condorcet.ca/scenario1.txt")
 				})
 
 				It("has all the 5 expected choices", func() {
@@ -108,7 +108,7 @@ var _ = Describe("Election", func() {
 			Context("scenario5.txt", func() {
 
 				BeforeEach(func() {
-					e = loadElectionFile("../fixtures/condorcet.ca/scenario5.txt")
+					e = loadElectionFile("fixtures/condorcet.ca/scenario5.txt")
 				})
 
 				It("has 2000 votes", func() {
